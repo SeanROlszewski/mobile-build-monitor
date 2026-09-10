@@ -12,9 +12,8 @@ with a button.
 
 The full manifest contract and troubleshooting notes live in the
 [mobile-build-monitor](https://github.com/SeanROlszewski/mobile-build-monitor)
-README (also symlinked at `~/.world-builds/README.md` on a standard install).
-Pick the platform by the repo you are working in and follow the steps from the
-worktree root.
+README. Pick the platform by the repo you are working in and follow the steps
+from the worktree root.
 
 ## iOS (world-app-ios)
 
@@ -96,5 +95,5 @@ If the dashboard may not be running, mention: `~/.world-builds/bin/dashboard`.
 - Do NOT run `devicectl`/`adb` install or launch yourself; delivery is
   user-initiated.
 - Do NOT hand-write manifest JSON unless the publisher script itself is
-  broken; if you must, follow the contract in `~/.world-builds/README.md`
+  broken; if you must, follow the contract in the mobile-build-monitor README
   exactly (`schemaVersion: 1`, correct `os` field).
