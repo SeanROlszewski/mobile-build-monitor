@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Publish a device build to the Mobile Build Monitor dashboard.
+
+Validates the artifact against the manifest contract in the project README and
+writes a manifest JSON into the builds directory (default ~/.world-builds/builds/,
+override with the WORLD_BUILDS_DIR environment variable).
+
+iOS, from a worktree root after a device build:
+
+    python3 ~/.world-builds/bin/publish-build \
+        --scheme "WorldApp Staging" \
+        --notes "MCORE-1234: verify the new selfie error screen"
+
+Android, from a worktree root after assembling an APK:
+
+    python3 ~/.world-builds/bin/publish-build --os android \
+        --notes "APP-1234: verify the new selfie error screen"
+"""
+
+import argparse
+import datetime
+import json
+import os
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(os.environ.get("WORLD_BUILDS_DIR", str(Path.home() / ".world-builds")))
+BUILDS_DIR = ROOT / "builds"
+DERIVED_DATA = Path.home() / "Library/Developer/Xcode/DerivedData"
+ANDROID_SDK = Path.home() / "Library/Android/sdk"
+SCHEMA_VERSION = 1
+
+
+def fail(msg):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def run(cmd, cwd=None):
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
+def git(worktree, *args):
+    res = run(["git", "-C", str(worktree), *args])
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def slug(text):
+    return re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower() or "build"
+
+
+# ---------------------------------------------------------------- iOS
+
+def derived_data_dirs_for(worktree):
+    """DerivedData dirs whose WorkspacePath lives inside this worktree."""
+    matches = []
+    for info in DERIVED_DATA.glob("*/info.plist"):
+        try:
+            with open(info, "rb") as f:
+                ws = plistlib.load(f).get("WorkspacePath", "")
+        except Exception:
+            continue
+        if ws and Path(ws).resolve().is_relative_to(Path(worktree).resolve()):
+            matches.append(info.parent)
+    return matches
+
+
+def is_app_clip(app_path):
+    try:
+        with open(app_path / "Info.plist", "rb") as f:
+            return "NSAppClip" in plistlib.load(f)
+    except Exception:
+        return False
+
+
+def ios_app_mtime(app_path):
+    """Freshness of a built .app: the executable's mtime. Info.plist is NOT
+    rewritten by incremental builds, so it understates freshness."""
+    try:
+        with open(app_path / "Info.plist", "rb") as f:
+            exe = app_path / plistlib.load(f).get("CFBundleExecutable", "")
+        if exe.is_file():
+            return exe.stat().st_mtime
+    except Exception:
+        pass
+    return (app_path / "Info.plist").stat().st_mtime
+
+
+def discover_ios_app(worktree, scheme):
+    """Find the newest device .app for this worktree matching the scheme."""
+    candidates = []
+    for dd in derived_data_dirs_for(worktree):
+        for products in (dd / "Build/Products").glob("*-iphoneos"):
+            candidates.extend(products.glob("*.app"))
+    if not candidates:
+        fail(
+            f"no *-iphoneos products found in DerivedData for worktree {worktree}.\n"
+            'Build for device first: make build-world DESTINATION="generic/platform=iOS"'
+        )
+    # Scheme "WorldApp Staging" -> product stem "WorldApp"
+    stem = scheme.split()[0].lower()
+    named = [a for a in candidates if a.stem.lower() == stem]
+    pool = named or [a for a in candidates if not is_app_clip(a)]
+    if not pool:
+        fail(
+            f"no non-app-clip .app matched scheme '{scheme}'. Candidates:\n  "
+            + "\n  ".join(str(c) for c in candidates)
+            + "\nPass --app-path explicitly."
+        )
+    return max(pool, key=ios_app_mtime)
+
+
+def publish_ios(args, worktree):
+    if not args.scheme:
+        fail('--scheme is required for iOS (e.g. "WorldApp Staging")')
+    app_path = Path(args.app_path).resolve() if args.app_path else discover_ios_app(worktree, args.scheme)
+    if not app_path.is_dir() or app_path.suffix != ".app":
+        fail(f"{app_path} is not a .app directory")
+
+    plist = app_path / "Info.plist"
+    if not plist.is_file():
+        fail(f"{app_path} has no Info.plist — not a built .app bundle")
+    with open(plist, "rb") as f:
+        info = plistlib.load(f)
+
+    warnings = []
+    platform = info.get("DTPlatformName", "")
+    if platform != "iphoneos":
+        fail(
+            f"{app_path.name} was built for '{platform or 'unknown'}', not iphoneos.\n"
+            'Rebuild for device: make build-world DESTINATION="generic/platform=iOS"'
+        )
+    exe = app_path / info.get("CFBundleExecutable", "")
+    if not exe.is_file():
+        fail(f"executable {exe} missing from bundle")
+    archs = run(["lipo", "-archs", str(exe)]).stdout.split()
+    if "arm64" not in archs:
+        fail(f"{exe.name} has no arm64 slice (found: {archs or 'none'}) — cannot sideload")
+    if not (app_path / "embedded.mobileprovision").is_file():
+        fail(
+            f"{app_path.name} has no embedded.mobileprovision — unsigned or "
+            "simulator-style build; cannot sideload"
+        )
+    if run(["codesign", "--verify", str(app_path)]).returncode != 0:
+        warnings.append("codesign --verify failed (signature may be broken)")
+
+    app = {
+        "name": info.get("CFBundleDisplayName") or info.get("CFBundleName") or app_path.stem,
+        "bundleId": info["CFBundleIdentifier"],
+        "version": info.get("CFBundleShortVersionString", "?"),
+        "buildNumber": str(info.get("CFBundleVersion", "?")),
+        "path": str(app_path),
+    }
+    configuration = args.configuration or app_path.parent.name.replace("-iphoneos", "")
+    return app, args.scheme, configuration, "iphoneos", ios_app_mtime(app_path), warnings
+
+
+# ---------------------------------------------------------------- Android
+
+def find_aapt2():
+    found = shutil.which("aapt2")
+    if found:
+        return found
+    candidates = sorted(ANDROID_SDK.glob("build-tools/*/aapt2"))
+    if not candidates:
+        fail("aapt2 not found on PATH or under ~/Library/Android/sdk/build-tools")
+    return str(candidates[-1])
+
+
+def discover_apk(worktree):
+    candidates = [
+        p for p in Path(worktree).glob("*/build/outputs/apk/*/*/*.apk")
+        if not p.name.endswith("-androidTest.apk")
+    ]
+    if not candidates:
+        fail(
+            f"no APKs found under */build/outputs/apk in {worktree}.\n"
+            "Build first: ./gradlew :app:assembleStagingDebug"
+        )
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def publish_android(args, worktree):
+    apk = Path(args.app_path).resolve() if args.app_path else discover_apk(worktree)
+    if not apk.is_file() or apk.suffix != ".apk":
+        fail(f"{apk} is not an .apk file")
+
+    badging = run([find_aapt2(), "dump", "badging", str(apk)])
+    if badging.returncode != 0:
+        fail(f"aapt2 dump badging failed for {apk}:\n{badging.stderr.strip()}")
+    out = badging.stdout
+
+    def badge(pattern, default=None):
+        m = re.search(pattern, out)
+        return m.group(1) if m else default
+
+    app_id = badge(r"package: name='([^']+)'")
+    if not app_id:
+        fail(f"could not read package name from {apk}")
+    warnings = []
+    if "application-debuggable" not in out:
+        warnings.append("APK is not debuggable — log streaming via logcat still works, "
+                        "but this may be a release-style build")
+
+    app = {
+        "name": badge(r"application-label:'([^']+)'", apk.stem),
+        "bundleId": app_id,
+        "version": badge(r"versionName='([^']+)'", "?"),
+        "buildNumber": badge(r"versionCode='([^']+)'", "?"),
+        "path": str(apk),
+    }
+    # .../apk/<flavor>/<buildType>/app-<flavor>-<buildType>.apk -> stagingDebug
+    flavor, build_type = apk.parent.parent.name, apk.parent.name
+    variant = flavor + build_type[:1].upper() + build_type[1:]
+    scheme = args.scheme or variant
+    configuration = args.configuration or variant
+    return app, scheme, configuration, "android", apk.stat().st_mtime, warnings
+
+
+# ---------------------------------------------------------------- main
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--os", choices=["ios", "android"], default="ios")
+    p.add_argument("--scheme", help='iOS: required, e.g. "WorldApp Staging". '
+                                    "Android: optional, defaults to the Gradle variant")
+    p.add_argument("--worktree", help="defaults to git toplevel of cwd")
+    p.add_argument("--app-path", help="explicit .app / .apk path (skips auto-discovery)")
+    p.add_argument("--configuration", help="recorded in the manifest (inferred if omitted)")
+    p.add_argument("--notes", help="what to QA — shown on the dashboard card")
+    p.add_argument("--pr", help="PR URL")
+    args = p.parse_args()
+
+    worktree = args.worktree or git(Path.cwd(), "rev-parse", "--show-toplevel")
+    if not worktree:
+        fail("not inside a git worktree; pass --worktree")
+    worktree = Path(worktree).resolve()
+
+    if args.os == "android":
+        app, scheme, configuration, platform, artifact_mtime, warnings = publish_android(args, worktree)
+    else:
+        app, scheme, configuration, platform, artifact_mtime, warnings = publish_ios(args, worktree)
+
+    branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
+    commit = git(worktree, "rev-parse", "--short", "HEAD") or "unknown"
+    dirty = bool(git(worktree, "status", "--porcelain"))
+
+    last_commit_ts = git(worktree, "log", "-1", "--format=%ct")
+    if last_commit_ts and artifact_mtime < int(last_commit_ts):
+        warnings.append(
+            "the artifact is OLDER than the worktree's last commit — likely stale; rebuild if in doubt"
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    built_at = datetime.datetime.fromtimestamp(artifact_mtime, datetime.timezone.utc)
+    build_id = f"{slug(branch)}_{now.strftime('%Y%m%dT%H%M%SZ')}"
+
+    manifest = {
+        "schemaVersion": SCHEMA_VERSION,
+        "id": build_id,
+        "os": args.os,
+        "builtAt": built_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "publishedAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "scheme": scheme,
+        "configuration": configuration,
+        "platform": platform,
+        "app": app,
+        "source": {
+            "worktree": str(worktree),
+            "branch": branch,
+            "commit": commit,
+            "dirty": dirty,
+            "pr": args.pr,
+        },
+        "notes": args.notes,
+    }
+
+    BUILDS_DIR.mkdir(parents=True, exist_ok=True)
+    manifest_path = BUILDS_DIR / f"{build_id}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+    print(f"published: {manifest_path}")
+    print(f"  os:      {args.os}")
+    print(f"  app:     {app['name']} ({app['bundleId']})")
+    print(f"  version: {app['version']} ({app['buildNumber']})")
+    print(f"  source:  {branch}@{commit}{' (dirty)' if dirty else ''}")
+    print(f"  built:   {manifest['builtAt']}")
+    print(f"  path:    {app['path']}")
+    for w in warnings:
+        print(f"  warning: {w}")
+    print("install from http://localhost:8484 (start: ~/.world-builds/bin/dashboard)")
+
+
+if __name__ == "__main__":
+    main()

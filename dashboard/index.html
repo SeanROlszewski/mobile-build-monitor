@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile App Builds</title>
+<style>
+  :root {
+    --bg: #f9f9f8;          /* TFH warm paper */
+    --panel: #ffffff;
+    --border: #e1dfda;       /* hairline warm gray */
+    --border-soft: #e7e5e2;
+    --fg: #161615;           /* near-black, warm */
+    --fg-soft: #373635;
+    --dim: #696969;
+    --accent: #ff642e;       /* TFH orange */
+    --accent-press: #e5541f;
+    --ok: #2da44e;
+    --warn: #e3a008;
+    --bad: #d1242f;
+    --console-bg: #161615;
+    --console-fg: #e7e5e2;
+    --font: "TWK Lausanne", "GT America", -apple-system, "SF Pro Display",
+            "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--font);
+    font-size: 15px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 56px 48px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  }
+  header h1 {
+    font-size: 44px; font-weight: 350; letter-spacing: -0.02em;
+    margin: 0; line-height: 1.05;
+  }
+  header .sub {
+    color: var(--dim); font-size: 13px; letter-spacing: .02em;
+    max-width: 340px; text-align: right;
+  }
+  header .right { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
+  .seg {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--panel); padding: 3px;
+  }
+  .seg button {
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    border: none; background: none; color: var(--dim);
+    border-radius: 999px; padding: 6px 18px; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .seg button.active { background: var(--fg); color: #fff; }
+  .seg button:not(.active):hover { color: var(--fg); }
+  main {
+    display: grid; grid-template-columns: 320px 1fr; gap: 48px;
+    padding: 40px 48px 64px; max-width: 1280px;
+  }
+  h2 {
+    font-size: 11px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--fg-soft);
+    margin: 0 0 18px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  h2 .tools { display: flex; gap: 14px; align-items: center; }
+  h2 .status { color: var(--dim); font-size: 10.5px; letter-spacing: .08em; }
+  h2 .status.live { color: var(--ok); }
+  h2 input.search {
+    font: 12px ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 12px; width: 180px; outline: none;
+    text-transform: none; letter-spacing: 0;
+  }
+  h2 input.search:focus { border-color: var(--accent); }
+  h2 .count { color: var(--dim); font-size: 10.5px; letter-spacing: .04em; text-transform: none; }
+  h2 button {
+    font-family: var(--font); font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; background: none; border: none;
+    color: var(--dim); cursor: pointer; padding: 0;
+  }
+  h2 button:hover { color: var(--accent); }
+  h2 button:disabled { opacity: .35; cursor: default; }
+  h2 button.stop:hover { color: var(--bad); }
+  .device, .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 12px;
+  }
+  .device { display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color .15s; }
+  .device:hover { border-color: var(--dim); }
+  .device.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .device .meta { min-width: 0; }
+  .device .name { font-weight: 500; }
+  .device .detail { color: var(--dim); font-size: 12.5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.connected { background: var(--ok); }
+  .dot.disconnected { background: var(--warn); }
+  .dot.unavailable, .dot.unknown { background: var(--bad); }
+  .badge {
+    display: inline-block; font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; padding: 2px 10px;
+    border-radius: 999px; border: 1px solid var(--border);
+    color: var(--dim); margin-right: 6px; background: var(--bg);
+  }
+  .badge.bad { color: var(--bad); border-color: var(--bad); background: none; }
+  .badge.warn { color: var(--warn); border-color: var(--warn); background: none; }
+  .card { padding: 20px 22px; }
+  .card .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  .card .title { font-weight: 500; font-size: 18px; letter-spacing: -0.01em; }
+  .card .title .ver { color: var(--dim); font-weight: 350; font-size: 15px; }
+  .card .line { color: var(--dim); font-size: 12.5px; margin-top: 4px; }
+  .card .line a { color: var(--accent); text-decoration: none; }
+  .card .line a:hover { text-decoration: underline; }
+  .card .line code {
+    color: var(--fg-soft); font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .card .notes {
+    margin-top: 14px; padding: 12px 14px; background: var(--bg);
+    border: 1px solid var(--border-soft); border-radius: 10px;
+    font-size: 13.5px; color: var(--fg-soft); white-space: pre-wrap;
+  }
+  .actions { display: flex; gap: 8px; flex: none; align-items: center; }
+  button.install, button.run {
+    font-family: var(--font); border-radius: 999px;
+    padding: 9px 22px; font-weight: 500; font-size: 14px; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  button.install { background: var(--accent); color: #fff; border: none; }
+  button.install:hover:not(:disabled) { background: var(--accent-press); }
+  button.run { background: none; color: var(--fg-soft); border: 1px solid var(--border); }
+  button.run:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  button.install:disabled, button.run:disabled { opacity: .35; cursor: not-allowed; }
+  button.remove {
+    font-family: var(--font);
+    background: none; border: 1px solid var(--border); color: var(--dim);
+    border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer;
+  }
+  button.remove:hover { color: var(--bad); border-color: var(--bad); }
+  label.launch {
+    color: var(--dim); font-size: 13px; display: flex; gap: 8px;
+    align-items: center; margin: 6px 2px 28px;
+  }
+  label.launch input { accent-color: var(--accent); }
+  main > section, .consoles, .consoles > section { min-width: 0; }
+  .consoles { grid-column: 1 / -1; display: grid; gap: 28px; }
+  .console {
+    background: var(--console-bg); color: var(--console-fg);
+    border-radius: 14px; padding: 18px 20px;
+    overflow-y: auto; overflow-x: hidden;
+    font: 12.5px/1.7 ui-monospace, "SF Mono", Menlo, monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+  #installConsole { min-height: 72px; max-height: 220px; }
+  #appConsole { min-height: 140px; max-height: 420px; }
+  .console .ok { color: #7ee2a8; }
+  .console .err { color: #ff8a7a; }
+  .console .meta-line { color: #8b949e; }
+  .empty { color: var(--dim); font-size: 13.5px; padding: 6px 2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mobile App Builds</h1>
+  <div class="right">
+    <div class="seg" id="osSwitch">
+      <button data-os="ios" onclick="setOS('ios')">iOS</button>
+      <button data-os="android" onclick="setOS('android')">Android</button>
+    </div>
+    <div class="sub">Agent-published device builds, installable and executable from the browser.</div>
+  </div>
+</header>
+<main>
+  <section>
+    <h2><span>Devices</span> <button onclick="loadDevices()">Refresh</button></h2>
+    <div id="devices" class="empty">loading…</div>
+    <label class="launch"><input type="checkbox" id="launch" checked> Launch with logs after install</label>
+  </section>
+  <section>
+    <h2><span>Builds</span> <button onclick="loadBuilds()">Refresh</button></h2>
+    <div id="builds" class="empty">loading…</div>
+  </section>
+  <div class="consoles">
+    <section>
+      <h2><span>Install</span></h2>
+      <pre id="installConsole" class="console">Select a device, then install a build.</pre>
+    </section>
+    <section>
+      <h2>
+        <span>App logs</span>
+        <span class="tools">
+          <span class="status" id="logStatus">not attached</span>
+          <span class="count" id="logCount"></span>
+          <input class="search" id="logSearch" type="search" placeholder="filter…" oninput="applyLogFilter()">
+          <button onclick="exportLogs()">Export</button>
+          <button onclick="clearConsole('appConsole'); applyLogFilter()">Clear</button>
+          <button class="stop" id="stopLogs" onclick="stopAppLogs()" disabled>Stop</button>
+        </span>
+      </h2>
+      <pre id="appConsole" class="console">Install with launch enabled, or press Run on a build, to attach.</pre>
+    </section>
+  </div>
+</main>
+<script>
+let selectedDevice = null;
+let installing = false;
+let logAbort = null;
+let logContext = null;
+let allDevices = [];
+let allBuilds = [];
+let currentOS = localStorage.getItem("wb-os") || "ios";
+
+function setOS(os) {
+  currentOS = os;
+  localStorage.setItem("wb-os", os);
+  selectedDevice = null;
+  for (const b of document.querySelectorAll("#osSwitch button"))
+    b.classList.toggle("active", b.dataset.os === os);
+  renderDevices();
+  renderBuilds();
+}
+
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+function ago(iso) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + "m ago";
+  if (s < 129600) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+function logLine(consoleId, text, cls) {
+  const c = document.getElementById(consoleId);
+  const stick = c.scrollTop + c.clientHeight >= c.scrollHeight - 8;
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = text + "\n";
+  if (consoleId === "appConsole") {
+    const q = document.getElementById("logSearch").value.trim().toLowerCase();
+    if (q) {
+      if (!text.toLowerCase().includes(q)) span.style.display = "none";
+      scheduleLogCount();
+    }
+  }
+  c.appendChild(span);
+  if (c.childNodes.length > 5000) c.removeChild(c.firstChild);
+  if (stick) c.scrollTop = c.scrollHeight;
+}
+let logCountTimer = null;
+function scheduleLogCount() {
+  if (logCountTimer) return;
+  logCountTimer = setTimeout(() => { logCountTimer = null; updateLogCount(); }, 250);
+}
+function clearConsole(consoleId) { document.getElementById(consoleId).textContent = ""; }
+
+function applyLogFilter() {
+  const q = document.getElementById("logSearch").value.trim().toLowerCase();
+  const c = document.getElementById("appConsole");
+  for (const span of c.children)
+    span.style.display = !q || span.textContent.toLowerCase().includes(q) ? "" : "none";
+  updateLogCount();
+  c.scrollTop = c.scrollHeight;
+}
+function updateLogCount() {
+  const q = document.getElementById("logSearch").value.trim();
+  const c = document.getElementById("appConsole");
+  const label = document.getElementById("logCount");
+  if (!q) { label.textContent = ""; return; }
+  let shown = 0;
+  for (const span of c.children) if (span.style.display !== "none") shown++;
+  label.textContent = `${shown}/${c.children.length} lines`;
+}
+function exportLogs() {
+  const c = document.getElementById("appConsole");
+  let text = "";
+  for (const span of c.children) text += span.textContent; // full buffer, filter ignored
+  if (!text) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const name = `${(logContext || "app-logs").replace(/[^A-Za-z0-9._-]+/g, "-")}_${stamp}.log`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function classify(line) {
+  return /FAILED|error/i.test(line) ? "err"
+       : /: OK$|^DONE 0$/.test(line) ? "ok"
+       : /^\$ /.test(line) ? "meta-line" : "";
+}
+
+async function loadDevices() {
+  const box = document.getElementById("devices");
+  box.className = "empty"; box.textContent = "loading…";
+  try {
+    const devices = await (await fetch("/api/devices")).json();
+    if (devices.error) throw new Error(devices.error);
+    allDevices = devices;
+    renderDevices();
+  } catch (e) {
+    box.className = "empty"; box.textContent = "device listing failed: " + e.message;
+  }
+}
+function renderDevices() {
+  const box = document.getElementById("devices");
+  const devices = allDevices.filter(d => d.os === currentOS);
+  box.className = ""; box.innerHTML = "";
+  if (!devices.length) {
+    box.className = "empty";
+    box.textContent = currentOS === "android"
+      ? "no Android devices — connect via USB or adb wireless debugging"
+      : "no paired iPhones — pair once via Xcode's Devices window";
+    return;
+  }
+  if (!devices.some(d => d.identifier === selectedDevice)) selectedDevice = null;
+  for (const d of devices) {
+    const state = d.state || "unknown";
+    const osLabel = d.os === "android" ? "Android" : "iOS";
+    const transport = d.transport ? " (" + (d.transport === "localNetwork" ? "wireless" : d.transport) + ")" : "";
+    const node = el(`<div class="device" data-id="${esc(d.identifier)}">
+      <span class="dot ${esc(state)}"></span>
+      <span class="meta">
+        <div class="name">${esc(d.name)}</div>
+        <div class="detail">${esc(d.marketingName || "")} · ${osLabel} ${esc(d.osVersion || "?")} · ${esc(state)}${esc(transport)}</div>
+      </span>
+    </div>`);
+    node.onclick = () => { selectedDevice = d.identifier; renderSelection(); };
+    box.appendChild(node);
+  }
+  renderSelection();
+}
+function renderSelection() {
+  for (const n of document.querySelectorAll(".device"))
+    n.classList.toggle("selected", n.dataset.id === selectedDevice);
+  for (const b of document.querySelectorAll("button.install"))
+    b.disabled = installing || !selectedDevice || b.dataset.missing === "1";
+  for (const b of document.querySelectorAll("button.run"))
+    b.disabled = installing || !selectedDevice;
+}
+
+async function loadBuilds() {
+  const box = document.getElementById("builds");
+  try {
+    allBuilds = await (await fetch("/api/builds")).json();
+  } catch (e) {
+    box.className = "empty"; box.textContent = "build listing failed: " + e.message;
+    return;
+  }
+  renderBuilds();
+}
+function renderBuilds() {
+  const box = document.getElementById("builds");
+  const builds = allBuilds.filter(b => b.invalid || (b.os || "ios") === currentOS);
+  box.className = ""; box.innerHTML = "";
+  if (!builds.length) {
+    box.className = "empty";
+    box.textContent = `no published ${currentOS === "android" ? "Android" : "iOS"} builds — agents publish via ~/.world-builds/bin/publish-build`;
+    return;
+  }
+  for (const b of builds) {
+    if (b.invalid) {
+      box.appendChild(el(`<div class="card"><span class="badge bad">invalid</span>${esc(b.id)}: ${esc(b.invalid)}</div>`));
+      continue;
+    }
+    const badges =
+      (b.appExists ? "" : `<span class="badge bad">.app missing</span>`) +
+      (b.source.dirty ? `<span class="badge warn">dirty</span>` : "") +
+      `<span class="badge">${esc(b.scheme)}</span>`;
+    const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
+    const card = el(`<div class="card">
+      <div class="top">
+        <div>
+          <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
+          <div class="line">${badges}</div>
+          <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr} · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""}</div>
+        </div>
+        <div class="actions">
+          <button class="remove" title="remove from list (keeps the .app)">✕</button>
+          <button class="run" title="relaunch the installed app and stream its logs">Run</button>
+          <button class="install" data-missing="${b.appExists ? 0 : 1}">Install</button>
+        </div>
+      </div>
+      ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
+    </div>`);
+    card.querySelector("button.install").onclick = () => install(b);
+    card.querySelector("button.run").onclick = () => startAppLogs(b);
+    card.querySelector("button.remove").onclick = async () => {
+      const what = `${b.app.name} ${b.app.version} — ${b.source.branch}@${b.source.commit}`;
+      if (!confirm(`Remove this build from the list?\n\n${what}\n\nThe ${b.os === "android" ? ".apk" : ".app"} stays on disk, but re-listing it means re-running the publisher.`)) return;
+      await fetch("/api/builds/" + encodeURIComponent(b.id), { method: "DELETE" });
+      loadBuilds();
+    };
+    box.appendChild(card);
+  }
+  renderSelection();
+}
+
+async function install(build) {
+  if (!selectedDevice || installing) return;
+  installing = true; renderSelection();
+  clearConsole("installConsole");
+  logLine("installConsole", `installing ${build.app.name} (${build.source.branch}@${build.source.commit})…`);
+  let succeeded = false;
+  try {
+    const res = await fetch("/api/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buildId: build.id, deviceId: selectedDevice }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    await pumpStream(res, line => {
+      if (/^DONE 0$/.test(line)) succeeded = true;
+      logLine("installConsole", line, classify(line));
+    });
+  } catch (e) {
+    logLine("installConsole", "request failed: " + e.message, "err");
+  } finally {
+    installing = false; renderSelection();
+  }
+  if (succeeded && document.getElementById("launch").checked) startAppLogs(build);
+}
+
+async function startAppLogs(build) {
+  if (!selectedDevice) return;
+  stopAppLogs();
+  const abort = new AbortController();
+  logAbort = abort;
+  logContext = `${build.app.bundleId}_${build.source.branch}@${build.source.commit}`;
+  setLogStatus(`attached — ${build.app.name} (${build.source.branch}@${build.source.commit})`, true);
+  clearConsole("appConsole");
+  logLine("appConsole", `launching ${build.app.bundleId} with console attached…`, "meta-line");
+  try {
+    const res = await fetch("/api/launch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buildId: build.id, deviceId: selectedDevice }),
+      signal: abort.signal,
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    await pumpStream(res, line => logLine("appConsole", line, classify(line)));
+    setLogStatus("stream ended", false);
+  } catch (e) {
+    if (e.name === "AbortError") {
+      logLine("appConsole", "detached (app keeps running)", "meta-line");
+      setLogStatus("not attached", false);
+    } else {
+      logLine("appConsole", "log stream failed: " + e.message, "err");
+      setLogStatus("not attached", false);
+    }
+  } finally {
+    if (logAbort === abort) logAbort = null;
+    document.getElementById("stopLogs").disabled = true;
+  }
+}
+function stopAppLogs() {
+  if (logAbort) logAbort.abort();
+}
+function setLogStatus(text, live) {
+  const s = document.getElementById("logStatus");
+  s.textContent = text;
+  s.classList.toggle("live", !!live);
+  document.getElementById("stopLogs").disabled = !live;
+}
+
+async function pumpStream(res, onLine) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop();
+    for (const line of lines) onLine(line);
+  }
+  if (buf) onLine(buf);
+}
+
+for (const b of document.querySelectorAll("#osSwitch button"))
+  b.classList.toggle("active", b.dataset.os === currentOS);
+loadDevices();
+loadBuilds();
+setInterval(loadBuilds, 30000);
+</script>
+</body>
+</html>
