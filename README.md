@@ -1,12 +1,13 @@
 # Mobile Build Monitor
 
 Local sideload delivery for mobile builds. Agents (or humans) build
-device-installable artifacts in their worktrees — iOS `.app`s from
-`example-ios-app`, Android `.apk`s from `example-android-app` — and **publish** them to a
-local queue. A zero-dependency web dashboard lists published builds and
+device-installable iOS `.app` and Android `.apk` artifacts in their worktrees,
+then **publish** them to a local queue. A zero-dependency web dashboard lists
+published builds and
 connected devices (iOS ⇄ Android switcher); clicking **Install** runs
 `xcrun devicectl device install app` / `adb install -r` against the selected
-device, and **Run** relaunches the app and streams its logs live.
+device, then starts live app logs. **Run** relaunches the app and starts a new
+log stream.
 
 The dashboard never builds anything — it is install/launch-only. Builds are
 produced in worktrees and handed over via a manifest contract, so any number of
@@ -40,6 +41,11 @@ JSON file per build). Override the data directory with the `MOBILE_BUILD_MONITOR
 environment variable — both the publisher and the server honor it. The server
 binds 127.0.0.1 only; pass a port as the first argument to change it from 8484.
 
+Removing a build in the dashboard removes its manifest from the active list,
+not its `.app` or `.apk`. A five-second **Undo** control restores the exact
+manifest. The recovery record expires at the same time, so refreshing the page
+does not extend or reveal an undo opportunity.
+
 Optionally symlink the tools somewhere stable so agent instructions don't
 depend on where you cloned the repo:
 
@@ -51,24 +57,21 @@ ln -sf "$PWD/bin/dashboard" ~/.mobile-build-monitor/bin/dashboard
 
 ## Publishing a build
 
-iOS (`example-ios-app`), from the worktree root:
+iOS, from the app worktree root:
 
 ```bash
-# 1. Build for device (NOT simulator). Redirect output — it will be truncated otherwise.
+# 1. Build for device (NOT simulator). Use your app's device-build command.
 make build DESTINATION="generic/platform=iOS" > /tmp/ios_build_device.txt 2>&1
 grep -c "BUILD SUCCEEDED" /tmp/ios_build_device.txt
 
 # 2. Publish (auto-discovers the .app via DerivedData for this worktree)
 bin/publish-build \
   --scheme "ExampleApp Staging" \
-  --notes "PROJ-1234: verify the new selfie error screen" \
+  --notes "PROJ-1234: verify the updated onboarding screen" \
   --pr "https://github.com/example-org/example-ios-app/pull/1234"
 ```
 
-Example ID variant: `make build DESTINATION="generic/platform=iOS"` and
-`--scheme "ExampleID Staging"`.
-
-Android (`example-android-app`), from the worktree root:
+Android, from the app worktree root:
 
 ```bash
 # 1. Assemble the QA variant. Redirect output — it will be truncated otherwise.
@@ -77,7 +80,7 @@ grep -c "BUILD SUCCESSFUL" /tmp/android_build.txt
 
 # 2. Publish (auto-discovers the newest APK under */build/outputs/apk)
 bin/publish-build --os android \
-  --notes "APP-1234: verify the new selfie error screen" \
+  --notes "PROJ-1234: verify the updated onboarding screen" \
   --pr "https://github.com/example-org/example-android-app/pull/1234"
 ```
 
@@ -103,9 +106,9 @@ Failure modes the publisher enforces:
   it; warns if the APK isn't debuggable (release-style build).
 - **Stale artifact**: if the newest `.app`/`.apk` is older than the worktree's
   last commit, the publisher warns; rebuild if in doubt.
-- **Signing failures during the iOS build**: retry the make command with
-  `XCODEBUILD_BASE='xcodebuild -project "ExampleApp.xcodeproj" -destination "generic/platform=iOS" -skipMacroValidation -allowProvisioningUpdates'`
-  so Xcode can refresh the development provisioning profiles.
+- **Signing failures during the iOS build**: use your project's documented
+  Xcode build command with provisioning updates enabled, if appropriate for
+  your signing setup.
 
 ## Agent integration
 
@@ -147,7 +150,7 @@ One JSON file per build in the builds directory, named `<id>.json`.
   },
   "source": {
     "worktree": "/abs/path/to/worktree",
-    "branch": "seanolszewski/my-branch",
+    "branch": "feature/my-branch",
     "commit": "abc1234",
     "dirty": false,
     "pr": "https://github.com/example-org/example-ios-app/pull/1234"

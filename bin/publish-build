@@ -2,19 +2,20 @@
 """Publish a device build to the Mobile Build Monitor dashboard.
 
 Validates the artifact against the manifest contract in the project README and
-writes a manifest JSON into the builds directory (default ~/.mobile-build-monitor/builds/,
-override with the MOBILE_BUILD_MONITOR_DIR environment variable).
+writes a manifest JSON into the builds directory (default
+~/.mobile-build-monitor/builds/, override with the MOBILE_BUILD_MONITOR_DIR
+environment variable).
 
 iOS, from a worktree root after a device build:
 
     python3 ~/.mobile-build-monitor/bin/publish-build \
         --scheme "ExampleApp Staging" \
-        --notes "PROJ-1234: verify the new selfie error screen"
+        --notes "PROJ-1234: verify the updated onboarding screen"
 
 Android, from a worktree root after assembling an APK:
 
     python3 ~/.mobile-build-monitor/bin/publish-build --os android \
-        --notes "APP-1234: verify the new selfie error screen"
+        --notes "PROJ-1234: verify the updated onboarding screen"
 """
 
 import argparse
@@ -99,9 +100,9 @@ def discover_ios_app(worktree, scheme):
     if not candidates:
         fail(
             f"no *-iphoneos products found in DerivedData for worktree {worktree}.\n"
-            'Build for device first: make build DESTINATION="generic/platform=iOS"'
+            'Build for device first using your app\'s device-build command'
         )
-    # Scheme "ExampleApp Staging" -> product stem "ExampleApp"
+    # Scheme "ExampleApp Staging" -> product stem "ExampleApp".
     stem = scheme.split()[0].lower()
     named = [a for a in candidates if a.stem.lower() == stem]
     pool = named or [a for a in candidates if not is_app_clip(a)]
@@ -132,7 +133,7 @@ def publish_ios(args, worktree):
     if platform != "iphoneos":
         fail(
             f"{app_path.name} was built for '{platform or 'unknown'}', not iphoneos.\n"
-            'Rebuild for device: make build DESTINATION="generic/platform=iOS"'
+            "Rebuild with your app's device-build command"
         )
     exe = app_path / info.get("CFBundleExecutable", "")
     if not exe.is_file():
