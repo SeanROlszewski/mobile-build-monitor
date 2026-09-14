@@ -146,6 +146,9 @@
     border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer;
   }
   button.remove:hover { color: var(--bad); border-color: var(--bad); }
+  #recentRuns { margin-bottom: 24px; }
+  #recentRuns h3 { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: .06em; margin: 0 0 10px; text-transform: uppercase; }
+  #recentBuilds { display: grid; gap: 12px; }
   main > section, .consoles, .consoles > section { min-width: 0; }
   .consoles { grid-column: 1 / -1; display: grid; gap: 28px; }
   .console {
@@ -204,6 +207,10 @@
   </section>
   <section>
     <h2><span>Builds</span> <button onclick="loadBuilds()">Refresh</button></h2>
+    <div id="recentRuns" hidden>
+      <h3>Recently ran</h3>
+      <div id="recentBuilds"></div>
+    </div>
     <div id="builds" class="empty">loading…</div>
   </section>
   <div class="consoles">
@@ -409,29 +416,41 @@ async function loadBuilds() {
 }
 function renderBuilds() {
   const box = document.getElementById("builds");
+  const recentBox = document.getElementById("recentBuilds");
+  const recentSection = document.getElementById("recentRuns");
   const builds = allBuilds.filter(b => b.invalid || (b.os || "ios") === currentOS);
   box.className = ""; box.innerHTML = "";
+  recentBox.innerHTML = "";
+  const recentlyRan = builds
+    .filter(b => !b.invalid && Number.isFinite(Date.parse(b.lastRunAt)))
+    .sort((a, b) => Date.parse(b.lastRunAt) - Date.parse(a.lastRunAt));
+  recentSection.hidden = recentlyRan.length === 0;
+  for (const build of recentlyRan) recentBox.appendChild(buildCard(build));
   if (!builds.length) {
     box.className = "empty";
     box.textContent = `no published ${currentOS === "android" ? "Android" : "iOS"} builds — agents publish via ~/.mobile-build-monitor/bin/publish-build`;
     return;
   }
-  for (const b of builds) {
-    if (b.invalid) {
-      box.appendChild(el(`<div class="card"><span class="badge bad">invalid</span>${esc(b.id)}: ${esc(b.invalid)}</div>`));
-      continue;
-    }
-    const badges =
-      (b.appExists ? "" : `<span class="badge bad">.app missing</span>`) +
-      (b.source.dirty ? `<span class="badge warn">dirty</span>` : "") +
-      `<span class="badge">${esc(b.scheme)}</span>`;
-    const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
-    const card = el(`<div class="card">
+  for (const b of builds) box.appendChild(buildCard(b));
+  renderSelection();
+}
+function buildCard(b) {
+  if (b.invalid) {
+    return el(`<div class="card"><span class="badge bad">invalid</span>${esc(b.id)}: ${esc(b.invalid)}</div>`);
+  }
+  const badges =
+    (b.appExists ? "" : `<span class="badge bad">.app missing</span>`) +
+    (b.source.dirty ? `<span class="badge warn">dirty</span>` : "") +
+    `<span class="badge">${esc(b.scheme)}</span>`;
+  const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
+  const runCount = Number.isSafeInteger(b.runCount) && b.runCount > 0 ? b.runCount : 0;
+  const runSummary = `${runCount} run${runCount === 1 ? "" : "s"}`;
+  const card = el(`<div class="card">
       <div class="top">
         <div>
           <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
           <div class="line">${badges}</div>
-          <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr} · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""}</div>
+          <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr} · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runSummary}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
         </div>
         <div class="actions">
           <button class="remove" title="remove from list (keeps the .app)">✕</button>
@@ -441,9 +460,9 @@ function renderBuilds() {
       </div>
       ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
     </div>`);
-    card.querySelector("button.install").onclick = () => install(b);
-    card.querySelector("button.run").onclick = () => startAppLogs(b);
-    card.querySelector("button.remove").onclick = async () => {
+  card.querySelector("button.install").onclick = () => install(b);
+  card.querySelector("button.run").onclick = () => runBuild(b);
+  card.querySelector("button.remove").onclick = async () => {
       const button = card.querySelector("button.remove");
       button.disabled = true;
       card.classList.add("removing");
@@ -476,10 +495,8 @@ function renderBuilds() {
         button.disabled = false;
         alert("Could not remove build: " + e.message);
       }
-    };
-    box.appendChild(card);
-  }
-  renderSelection();
+  };
+  return card;
 }
 
 async function install(build) {
@@ -505,6 +522,22 @@ async function install(build) {
     installing = false; renderSelection();
   }
   if (succeeded) startAppLogs(build);
+}
+
+async function runBuild(build) {
+  if (!selectedDevice || installing) return;
+  try {
+    const res = await fetch("/api/builds/" + encodeURIComponent(build.id) + "/run", { method: "POST" });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    build.runCount = data.runCount;
+    build.lastRunAt = data.lastRunAt;
+    renderBuilds();
+    startAppLogs(build);
+  } catch (e) {
+    logLine("appConsole", "could not start run: " + e.message, "err");
+    setLogStatus("not attached", false);
+  }
 }
 
 async function startAppLogs(build) {

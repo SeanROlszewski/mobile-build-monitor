@@ -5,14 +5,16 @@ Serves the dashboard page and brokers devicectl commands:
   GET    /                 dashboard page
   GET    /api/builds       published build manifests (newest first)
   GET    /api/devices      paired physical devices via devicectl
-  POST   /api/install      {"buildId": ..., "deviceId": ..., "launch": bool}
-                           streams install/launch output as plain text
+  POST   /api/install      {"buildId": ..., "deviceId": ...}
+                           streams install output as plain text
+  POST   /api/builds/<id>/run  records an explicit dashboard run
   DELETE /api/builds/<id>  remove a manifest (leaves the .app on disk)
   POST   /api/builds/restore  restore a recently removed manifest
 
 Binds 127.0.0.1 only. Zero dependencies (python3 stdlib).
 """
 
+import datetime
 import json
 import os
 import shutil
@@ -20,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,6 +32,7 @@ ROOT = Path(os.environ.get("MOBILE_BUILD_MONITOR_DIR", str(Path.home() / ".mobil
 BUILDS_DIR = ROOT / "builds"
 REMOVED_BUILDS_DIR = ROOT / ".removed-build-manifests"
 UNDO_TTL_SECONDS = 5
+BUILD_WRITE_LOCK = threading.Lock()
 INDEX = Path(__file__).parent / "index.html"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8484
 
@@ -305,6 +309,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/builds/restore":
             return self.handle_restore_build()
+        prefix, suffix = "/api/builds/", "/run"
+        if self.path.startswith(prefix) and self.path.endswith(suffix):
+            return self.handle_record_run(self.path[len(prefix):-len(suffix)])
         if self.path == "/api/install":
             return self.handle_install()
         if self.path == "/api/launch":
@@ -343,6 +350,49 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self.send_json({"error": f"could not restore build: {e}"}, status=500)
         self.send_json({"ok": True})
+
+    def handle_record_run(self, build_id):
+        if not build_id or "/" in build_id or ".." in build_id:
+            return self.send_json({"error": "bad build id"}, status=400)
+        manifest_path = BUILDS_DIR / f"{build_id}.json"
+        with BUILD_WRITE_LOCK:
+            try:
+                manifest = json.loads(manifest_path.read_text())
+            except FileNotFoundError:
+                return self.send_json({"error": "unknown build"}, status=404)
+            except (OSError, json.JSONDecodeError) as e:
+                return self.send_json({"error": f"could not read build manifest: {e}"}, status=500)
+            if not isinstance(manifest, dict):
+                return self.send_json({"error": "invalid build manifest"}, status=500)
+
+            prior_count = manifest.get("runCount", 0)
+            if isinstance(prior_count, bool) or not isinstance(prior_count, int) or prior_count < 0:
+                prior_count = 0
+            run_count = prior_count + 1
+            last_run_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            manifest["runCount"] = run_count
+            manifest["lastRunAt"] = last_run_at
+
+            temporary_manifest = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=BUILDS_DIR,
+                    prefix=f".{build_id}.", suffix=".tmp", delete=False,
+                ) as f:
+                    temporary_manifest = Path(f.name)
+                    json.dump(manifest, f, indent=2)
+                    f.write("\n")
+                temporary_manifest.replace(manifest_path)
+            except OSError as e:
+                return self.send_json({"error": f"could not record run: {e}"}, status=500)
+            finally:
+                if temporary_manifest is not None:
+                    try:
+                        temporary_manifest.unlink()
+                    except FileNotFoundError:
+                        pass
+
+        self.send_json({"ok": True, "runCount": run_count, "lastRunAt": last_run_at})
 
     def handle_install(self):
         try:
