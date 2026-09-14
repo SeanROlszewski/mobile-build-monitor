@@ -1,53 +1,38 @@
 # Mobile Build Monitor
 
-Local sideload delivery for mobile builds. Agents (or humans) build
-device-installable iOS `.app` and Android `.apk` artifacts in their worktrees,
-then **publish** them to a local queue. A zero-dependency web dashboard lists
-published builds and
-connected devices (iOS ⇄ Android switcher); clicking **Install** runs
-`xcrun devicectl device install app` / `adb install -r` against the selected
-device, then starts live app logs. **Run** relaunches the app and starts a new
-log stream.
+A local dashboard for installing iOS and Android builds on connected devices.
 
-The dashboard never builds anything — it is install/launch-only. Builds are
-produced in worktrees and handed over via a manifest contract, so any number of
-agents can publish concurrently without touching each other.
+Build your app, publish it, then pick a device and click **Install**. The dashboard installs the build and starts live app logs. Click **Run** to relaunch the app with a fresh log stream.
 
-```
-bin/publish-build   publisher: validates a build and writes its manifest
-bin/dashboard       starts the dashboard server (http://localhost:8484)
-dashboard/          server.py (python3 stdlib only) + index.html
-skills/             Claude Code agent skill for publishing builds
-```
+Builds can come from any worktree, so you can work on several branches—or use several coding agents—at once. Each published build includes its branch, commit, PR, and testing notes so you can tell them apart.
+
+The dashboard handles installation and launch. Build the app using your project’s usual tools.
 
 ## Requirements
 
-- macOS with Python 3.9+ (stock `python3` is fine — no pip packages needed)
-- iOS installs: Xcode command line tools (`xcrun devicectl`), a device paired
-  with your Mac, and builds signed with a development profile that includes it
-- Android installs: `adb` (on `PATH` or in `~/Library/Android/sdk/platform-tools`),
-  plus `aapt2` for publishing (auto-found under `~/Library/Android/sdk/build-tools`)
+- macOS with Python 3.9 or later. No Python packages to install.
+- For iOS: Xcode command line tools (`xcrun devicectl`), a device paired with your Mac, and a development build signed for that device.
+- For Android: `adb` on your `PATH` or in `~/Library/Android/sdk/platform-tools`, plus `aapt2` for publishing. The publisher looks for `aapt2` in `~/Library/Android/sdk/build-tools`.
 
 ## Setup
 
 ```bash
 git clone git@github.com:SeanROlszewski/mobile-build-monitor.git
 cd mobile-build-monitor
-bin/dashboard          # → http://localhost:8484
+bin/dashboard
 ```
 
-Published manifests live outside the repo in `~/.mobile-build-monitor/builds/` (one
-JSON file per build). Override the data directory with the `MOBILE_BUILD_MONITOR_DIR`
-environment variable — both the publisher and the server honor it. The server
-binds 127.0.0.1 only; pass a port as the first argument to change it from 8484.
+Open [localhost:8484](http://localhost:8484) to see your builds and connected devices. Use the iOS/Android switcher to choose a platform.
 
-Removing a build in the dashboard removes its manifest from the active list,
-not its `.app` or `.apk`. A five-second **Undo** control restores the exact
-manifest. The recovery record expires at the same time, so refreshing the page
-does not extend or reveal an undo opportunity.
+The server listens on `127.0.0.1`. To use a different port, pass it as the first argument:
 
-Optionally symlink the tools somewhere stable so agent instructions don't
-depend on where you cloned the repo:
+```bash
+bin/dashboard 8485
+```
+
+### Add the tools to a stable location
+
+These optional symlinks let you use the tools from any app worktree:
 
 ```bash
 mkdir -p ~/.mobile-build-monitor/bin
@@ -55,81 +40,107 @@ ln -sf "$PWD/bin/publish-build" ~/.mobile-build-monitor/bin/publish-build
 ln -sf "$PWD/bin/dashboard" ~/.mobile-build-monitor/bin/dashboard
 ```
 
+The examples below use these paths.
+
 ## Publishing a build
 
-iOS, from the app worktree root:
+### iOS
+
+From your app’s worktree, build for a physical device using your project’s build command. For example:
 
 ```bash
-# 1. Build for device (NOT simulator). Use your app's device-build command.
 make build DESTINATION="generic/platform=iOS" > /tmp/ios_build_device.txt 2>&1
 grep -c "BUILD SUCCEEDED" /tmp/ios_build_device.txt
+```
 
-# 2. Publish (auto-discovers the .app via DerivedData for this worktree)
-bin/publish-build \
+Then publish the build:
+
+```bash
+~/.mobile-build-monitor/bin/publish-build \
   --scheme "ExampleApp Staging" \
   --notes "PROJ-1234: verify the updated onboarding screen" \
   --pr "https://github.com/example-org/example-ios-app/pull/1234"
 ```
 
-Android, from the app worktree root:
+The publisher finds the `.app` in DerivedData for the current worktree.
+
+### Android
+
+From your app’s worktree, assemble the variant you want to test:
 
 ```bash
-# 1. Assemble the QA variant. Redirect output — it will be truncated otherwise.
 ./gradlew :app:assembleStagingDebug > /tmp/android_build.txt 2>&1
 grep -c "BUILD SUCCESSFUL" /tmp/android_build.txt
+```
 
-# 2. Publish (auto-discovers the newest APK under */build/outputs/apk)
-bin/publish-build --os android \
+Then publish the build:
+
+```bash
+~/.mobile-build-monitor/bin/publish-build --os android \
   --notes "PROJ-1234: verify the updated onboarding screen" \
   --pr "https://github.com/example-org/example-android-app/pull/1234"
 ```
 
-`--scheme` is optional on Android — it defaults to the Gradle variant inferred
-from the APK path (e.g. `stagingDebug`). Metadata comes from `aapt2 dump
-badging`; `-androidTest.apk` artifacts are ignored during discovery.
+The publisher finds the newest APK under `*/build/outputs/apk`, skipping `-androidTest.apk` files. It reads app metadata with `aapt2 dump badging`.
 
-Publisher options:
+You can pass `--scheme` to name the build, or leave it out to use the Gradle variant inferred from the APK path, such as `stagingDebug`.
 
-- `--worktree PATH` — defaults to the git toplevel of the current directory.
-- `--app-path PATH` — skip auto-discovery and use this `.app`/`.apk` explicitly.
-- `--configuration NAME` — recorded in the manifest; inferred from the
-  products dir name (`<Config>-iphoneos`) when omitted.
-- `--notes` / `--pr` — strongly encouraged; this is what the human sees.
+### Options
 
-Failure modes the publisher enforces:
+| Option | Description |
+|---|---|
+| `--worktree PATH` | App worktree to publish from. Defaults to the Git root of the current directory. |
+| `--app-path PATH` | Use a specific `.app` directory or `.apk` file instead of finding one automatically. |
+| `--scheme NAME` | Xcode scheme on iOS. On Android, defaults to the Gradle variant inferred from the APK path. |
+| `--configuration NAME` | Build configuration to record. For iOS, inferred from the products directory name (`<Config>-iphoneos`) when omitted. |
+| `--notes TEXT` | Testing notes shown on the build card. |
+| `--pr URL` | Link to the pull request. |
 
-- **Simulator build** (`DTPlatformName != iphoneos`): rejected. Rebuild with
-  `DESTINATION="generic/platform=iOS"`.
-- **No arm64 slice** or **missing `embedded.mobileprovision`** (iOS): rejected —
-  the build can't be sideloaded.
-- **Unreadable APK** (Android): rejected if `aapt2 dump badging` can't parse
-  it; warns if the APK isn't debuggable (release-style build).
-- **Stale artifact**: if the newest `.app`/`.apk` is older than the worktree's
-  last commit, the publisher warns; rebuild if in doubt.
-- **Signing failures during the iOS build**: use your project's documented
-  Xcode build command with provisioning updates enabled, if appropriate for
-  your signing setup.
+Include testing notes and a PR link when you can. They make it easier to identify builds and remember what to check.
 
-## Agent integration
+### Build validation
 
-`skills/publish-device-build/SKILL.md` is a Claude Code skill that teaches an
-agent the full build-and-publish flow. Install it by symlinking into your
-personal skills directory:
+The publisher checks builds before adding them to the dashboard:
+
+- **iOS simulator builds** are rejected. Build for a physical device instead.
+- **iOS builds without arm64 support or an embedded provisioning profile** are rejected.
+- **Unreadable Android APKs** are rejected if `aapt2` cannot parse them. Non-debuggable APKs produce a warning.
+- **Builds older than the worktree’s latest commit** produce a warning. Rebuild if you’re unsure whether the build includes your changes.
+
+If an iOS build fails because of signing, use your project’s documented Xcode build command. You may need provisioning updates enabled, depending on your signing setup.
+
+## Managing builds
+
+Published builds are listed in `~/.mobile-build-monitor/builds/`, with one JSON manifest per build. To use another directory, set `MOBILE_BUILD_MONITOR_DIR` for both the publisher and the dashboard.
+
+Removing a build from the dashboard removes its manifest, leaving the `.app` or `.apk` on disk. You have five seconds to undo the removal. Refreshing the page does not extend that window.
+
+Keep the app file on disk until you’ve installed it. Publishing records its location; it does not copy the build.
+
+## Using coding agents
+
+The included Claude Code skill covers building and publishing device builds. Install it from this repository’s root:
 
 ```bash
 ln -s "$PWD/skills/publish-device-build" ~/.claude/skills/publish-device-build
 ```
 
-Agents should **always publish through `bin/publish-build`** — it locates the
-artifact, validates the contract (device platform, arm64, code signature,
-embedded provisioning profile), extracts Info.plist/git metadata, and writes
-the manifest. Hand-writing manifest JSON is only a fallback if the script
-cannot run; if you do, every "yes" field below is mandatory and the same
-validation rules apply.
+The skill uses `publish-build` to find the build, validate it, collect app and Git metadata, and write the manifest. Multiple agents can publish from separate worktrees at the same time.
 
-## Build manifest contract (schemaVersion 1)
+## Repository layout
 
-One JSON file per build in the builds directory, named `<id>.json`.
+```text
+bin/publish-build   Validates builds and publishes their manifests
+bin/dashboard       Starts the local dashboard
+dashboard/          Python server and web interface
+skills/             Claude Code skill for building and publishing
+```
+
+The server uses only the Python standard library.
+
+## Manifest format
+
+The publisher writes one file per build to the builds directory, named `<id>.json`. Use the publisher whenever possible. If you need to write a manifest yourself, follow the format and validation rules below.
 
 ```json
 {
@@ -155,42 +166,48 @@ One JSON file per build in the builds directory, named `<id>.json`.
     "dirty": false,
     "pr": "https://github.com/example-org/example-ios-app/pull/1234"
   },
-  "notes": "What to QA and why this build exists."
+  "notes": "Verify the updated onboarding screen."
 }
 ```
 
-Field rules:
+### Fields
 
-| Field | Required | Notes |
+| Field | Required | Description |
 |---|---|---|
-| `schemaVersion` | yes | Literal `1`. Bump only with a dashboard change. |
-| `id` | yes | Unique; also the filename stem. `slug(branch)_UTCstamp`. |
-| `os` | yes | `"ios"` or `"android"`. Missing = `"ios"` (pre-Android manifests). |
-| `builtAt` | yes | ISO-8601 UTC. When the artifact was **built** (executable/APK mtime). |
-| `publishedAt` | no | ISO-8601 UTC. When the manifest was written. Missing = older manifests; treat as `builtAt` (which was publish time before this field existed). |
-| `scheme` | yes | iOS: Xcode scheme. Android: Gradle variant (e.g. `stagingDebug`). |
-| `configuration` | yes | iOS: build configuration (e.g. `Staging_Debug`). Android: variant. |
-| `platform` | yes | iOS: `iphoneos` (simulator builds rejected). Android: `android`. |
-| `app.name` | yes | iOS: `CFBundleDisplayName`/`CFBundleName`. Android: `application-label`. |
-| `app.bundleId` | yes | iOS: `CFBundleIdentifier`. Android: `applicationId`. Used for launch/logs. |
-| `app.version` / `app.buildNumber` | yes | iOS: Info.plist. Android: `versionName` / `versionCode`. |
-| `app.path` | yes | iOS: absolute path to the `.app` **directory** (not an .ipa). Android: absolute path to the `.apk` file. Must stay on disk until installed — don't clean build output before QA. |
-| `source.worktree` | yes | Absolute path to the worktree that built it. |
-| `source.branch` / `source.commit` | yes | `commit` is the short hash. |
-| `source.dirty` | yes | `true` if the worktree had uncommitted changes. |
-| `source.pr` | no | PR URL if one exists, else `null`. |
-| `notes` | no | Free text shown on the dashboard card — say what to QA. |
+| `schemaVersion` | Yes | Must be `1`. A new version requires a corresponding dashboard update. |
+| `id` | Yes | Unique build ID and filename stem, using `slug(branch)_UTCstamp`. |
+| `os` | Yes | `"ios"` or `"android"`. Older manifests without this field are treated as iOS builds. |
+| `builtAt` | Yes | Build time in ISO-8601 UTC, taken from the executable or APK modification time. |
+| `publishedAt` | No | Time the manifest was written, in ISO-8601 UTC. Older manifests fall back to `builtAt`, which previously stored the publish time. |
+| `scheme` | Yes | Xcode scheme on iOS; Gradle variant on Android. |
+| `configuration` | Yes | iOS build configuration, such as `Staging_Debug`; variant on Android. |
+| `platform` | Yes | `iphoneos` for iOS or `android` for Android. |
+| `app.name` | Yes | `CFBundleDisplayName` or `CFBundleName` on iOS; `application-label` on Android. |
+| `app.bundleId` | Yes | `CFBundleIdentifier` on iOS; `applicationId` on Android. Used to launch the app and collect logs. |
+| `app.version` | Yes | `CFBundleShortVersionString` on iOS; `versionName` on Android. |
+| `app.buildNumber` | Yes | `CFBundleVersion` on iOS; `versionCode` on Android. |
+| `app.path` | Yes | Absolute path to the `.app` directory or `.apk` file. iOS `.ipa` files are not supported. |
+| `source.worktree` | Yes | Absolute path to the worktree that produced the build. |
+| `source.branch` | Yes | Git branch name. |
+| `source.commit` | Yes | Short Git commit hash. |
+| `source.dirty` | Yes | `true` if the worktree had uncommitted changes. |
+| `source.pr` | No | Pull request URL, or `null`. |
+| `notes` | No | Testing notes shown on the build card. |
 
-## Platform notes
+Manually published iOS builds must pass the same device-platform, arm64, code-signature, and provisioning-profile checks as builds published by the script.
 
-- iOS install = `devicectl device install app`; app logs = `devicectl device
-  process launch --terminate-existing --console` (console attach is only
-  possible at launch, so **Run** relaunches the app). Detaching kills the local
-  `devicectl` with SIGKILL — devicectl forwards catchable signals to the app,
-  so SIGTERM would terminate the app on the device.
-- `devicectl list devices` reports a stale `tunnelState` for wired devices (it
-  tracks the wireless tunnel), so the server probes each device with
-  `device info details` for live state.
-- Android install = `adb install -r`; logs = pid-scoped `logcat`, which
-  attaches to the running app **without** restarting it (the app is launched
-  via a LAUNCHER intent only if not already running). Stop is always safe.
+## Platform details
+
+### iOS
+
+Installation uses `xcrun devicectl device install app`. Logs come from `devicectl device process launch --terminate-existing --console`, which can attach only when the app launches. That’s why **Run** relaunches the app.
+
+To stop collecting logs without terminating the app, the server kills the local `devicectl` process with `SIGKILL`. Catchable signals such as `SIGTERM` would be forwarded to the app.
+
+The server checks device availability with `device info details`. The `tunnelState` reported by `devicectl list devices` tracks the wireless tunnel and can be stale for wired devices.
+
+### Android
+
+Installation uses `adb install -r`. Logs use `logcat`, filtered to the app’s process.
+
+Logging can attach to a running app without restarting it. If the app isn’t running, it is started through a launcher intent. Stopping the log stream leaves the app running.
