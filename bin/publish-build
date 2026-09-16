@@ -248,8 +248,6 @@ def main():
 
     branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
     commit = git(worktree, "rev-parse", "--short", "HEAD") or "unknown"
-    dirty = bool(git(worktree, "status", "--porcelain"))
-
     last_commit_ts = git(worktree, "log", "-1", "--format=%ct")
     if last_commit_ts and artifact_mtime < int(last_commit_ts):
         warnings.append(
@@ -274,7 +272,6 @@ def main():
             "worktree": str(worktree),
             "branch": branch,
             "commit": commit,
-            "dirty": dirty,
             "pr": args.pr,
         },
         "notes": args.notes,
@@ -288,7 +285,7 @@ def main():
     print(f"  os:      {args.os}")
     print(f"  app:     {app['name']} ({app['bundleId']})")
     print(f"  version: {app['version']} ({app['buildNumber']})")
-    print(f"  source:  {branch}@{commit}{' (dirty)' if dirty else ''}")
+    print(f"  source:  {branch}@{commit}")
     print(f"  built:   {manifest['builtAt']}")
     print(f"  path:    {app['path']}")
     for w in warnings:

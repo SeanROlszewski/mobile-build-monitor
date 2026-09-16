@@ -113,19 +113,31 @@ If an iOS build fails because of signing, use your project’s documented Xcode 
 
 Published builds are listed in `~/.mobile-build-monitor/builds/`, with one JSON manifest per build. To use another directory, set `MOBILE_BUILD_MONITOR_DIR` for both the publisher and the dashboard.
 
-Removing a build from the dashboard removes its manifest, leaving the `.app` or `.apk` on disk. You have five seconds to undo the removal. Refreshing the page does not extend that window.
+Removing a build moves its manifest to the collapsed **Recently Removed** section and leaves the `.app` or `.apk` on disk. You can restore it there, or permanently remove its manifest; neither action deletes the build artifact.
 
 Keep the app file on disk until you’ve installed it. Publishing records its location; it does not copy the build.
 
 ## Using coding agents
 
-The included Claude Code skill covers building and publishing device builds. Install it from this repository’s root:
+The included `publish-device-build` skill covers building and publishing device builds. It uses `publish-build` to find the build, validate it, collect app and Git metadata, and write the manifest. Multiple agents can publish from separate worktrees at the same time.
+
+### Codex
+
+Codex discovers the checked-in skill automatically when working in this repository. To make it available while Codex works in any app worktree, install it globally from this repository’s root:
 
 ```bash
-ln -s "$PWD/skills/publish-device-build" ~/.claude/skills/publish-device-build
+mkdir -p ~/.agents/skills
+ln -sfn "$PWD/skills/publish-device-build" ~/.agents/skills/publish-device-build
 ```
 
-The skill uses `publish-build` to find the build, validate it, collect app and Git metadata, and write the manifest. Multiple agents can publish from separate worktrees at the same time.
+Start a new Codex session if the skill does not appear immediately.
+
+### Claude Code
+
+```bash
+mkdir -p ~/.claude/skills
+ln -sfn "$PWD/skills/publish-device-build" ~/.claude/skills/publish-device-build
+```
 
 ## Repository layout
 
@@ -133,7 +145,8 @@ The skill uses `publish-build` to find the build, validate it, collect app and G
 bin/publish-build   Validates builds and publishes their manifests
 bin/dashboard       Starts the local dashboard
 dashboard/          Python server and web interface
-skills/             Claude Code skill for building and publishing
+.agents/skills/     Codex skill entry point
+skills/             Shared skill instructions for Codex and Claude Code
 ```
 
 The server uses only the Python standard library.
@@ -163,7 +176,6 @@ The publisher writes one file per build to the builds directory, named `<id>.jso
     "worktree": "/abs/path/to/worktree",
     "branch": "feature/my-branch",
     "commit": "abc1234",
-    "dirty": false,
     "pr": "https://github.com/example-org/example-ios-app/pull/1234"
   },
   "notes": "Verify the updated onboarding screen."
@@ -190,7 +202,6 @@ The publisher writes one file per build to the builds directory, named `<id>.jso
 | `source.worktree` | Yes | Absolute path to the worktree that produced the build. |
 | `source.branch` | Yes | Git branch name. |
 | `source.commit` | Yes | Short Git commit hash. |
-| `source.dirty` | Yes | `true` if the worktree had uncommitted changes. |
 | `source.pr` | No | Pull request URL, or `null`. |
 | `notes` | No | Testing notes shown on the build card. |
 

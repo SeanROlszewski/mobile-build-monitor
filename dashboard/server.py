@@ -3,12 +3,15 @@
 
 Serves the dashboard page and brokers devicectl commands:
   GET    /                 dashboard page
-  GET    /api/builds       published build manifests (newest first)
+  GET    /api/builds       active build manifests (newest first)
+  GET    /api/removed-builds  soft-removed build manifests (newest first)
   GET    /api/devices      paired physical devices via devicectl
+  GET    /api/settings     local dashboard settings
   POST   /api/install      {"buildId": ..., "deviceId": ...}
                            streams install output as plain text
   POST   /api/builds/<id>/run  records an explicit dashboard run
-  DELETE /api/builds/<id>  remove a manifest (leaves the .app on disk)
+  DELETE /api/builds/<id>  soft-remove a manifest (leaves the artifact on disk)
+  DELETE /api/removed-builds/<id>  permanently delete a removed manifest
   POST   /api/builds/restore  restore a recently removed manifest
 
 Binds 127.0.0.1 only. Zero dependencies (python3 stdlib).
@@ -31,7 +34,6 @@ from pathlib import Path
 ROOT = Path(os.environ.get("MOBILE_BUILD_MONITOR_DIR", str(Path.home() / ".mobile-build-monitor")))
 BUILDS_DIR = ROOT / "builds"
 REMOVED_BUILDS_DIR = ROOT / ".removed-build-manifests"
-UNDO_TTL_SECONDS = 5
 BUILD_WRITE_LOCK = threading.Lock()
 INDEX = Path(__file__).parent / "index.html"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8484
@@ -55,17 +57,47 @@ def load_builds():
     return builds
 
 
-def discard_expired_undos():
-    """Remove recovery records after their intentionally short undo window."""
+def load_removed_builds():
+    """Return soft-removed manifests, newest removal first."""
     if not REMOVED_BUILDS_DIR.is_dir():
-        return
-    cutoff = time.time() - UNDO_TTL_SECONDS
-    for manifest in REMOVED_BUILDS_DIR.glob("*.json"):
+        return []
+    builds = []
+    for f in REMOVED_BUILDS_DIR.glob("*.json"):
+        removed_id = f.name[:32]
+        if len(removed_id) != 32 or f.name[32:33] != "-":
+            continue
         try:
-            if manifest.stat().st_mtime <= cutoff:
-                manifest.unlink()
-        except FileNotFoundError:
-            pass
+            m = json.loads(f.read_text())
+            removed_at = datetime.datetime.fromtimestamp(
+                f.stat().st_mtime, datetime.timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(m, dict):
+            continue
+        m["os"] = m.get("os", "ios")
+        artifact = Path(m.get("app", {}).get("path", "/nonexistent"))
+        m["appExists"] = artifact.is_dir() if m["os"] == "ios" else artifact.is_file()
+        m["removedId"] = removed_id
+        m["removedAt"] = removed_at
+        builds.append(m)
+    builds.sort(key=lambda b: b["removedAt"], reverse=True)
+    return builds
+
+
+def removed_manifest_for(removed_id):
+    """Find the saved manifest for a server-generated removal identifier."""
+    if (not isinstance(removed_id, str) or len(removed_id) != 32
+            or any(c not in "0123456789abcdef" for c in removed_id)):
+        return None
+    saved_manifests = list(REMOVED_BUILDS_DIR.glob(f"{removed_id}-*.json"))
+    if len(saved_manifests) != 1 or not saved_manifests[0].is_file():
+        return None
+    return saved_manifests[0]
+
+
+def valid_build_id(build_id):
+    return bool(build_id) and "/" not in build_id and ".." not in build_id
 
 
 def probe_device(identifier):
@@ -218,36 +250,52 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif self.path == "/api/builds":
             self.send_json(load_builds())
+        elif self.path == "/api/removed-builds":
+            self.send_json(load_removed_builds())
         elif self.path == "/api/devices":
             try:
                 self.send_json(load_devices())
             except Exception as e:
                 self.send_json({"error": str(e)}, status=500)
+        elif self.path == "/api/settings":
+            self.send_json({"buildsDirectory": str(BUILDS_DIR)})
         else:
             self.send_json({"error": "not found"}, status=404)
 
     def do_DELETE(self):
+        removed_prefix = "/api/removed-builds/"
+        if self.path.startswith(removed_prefix):
+            return self.handle_hard_delete(self.path[len(removed_prefix):])
         prefix = "/api/builds/"
         if not self.path.startswith(prefix):
             return self.send_json({"error": "not found"}, status=404)
         build_id = self.path[len(prefix):]
         # id is a filename stem; refuse anything path-like
-        if "/" in build_id or ".." in build_id or not build_id:
+        if not valid_build_id(build_id):
             return self.send_json({"error": "bad id"}, status=400)
         manifest = BUILDS_DIR / f"{build_id}.json"
         if not manifest.is_file():
             return self.send_json({"error": "unknown build"}, status=404)
-        # Keep the manifest outside the active list so an accidental removal
-        # can be undone without trusting the browser to reconstruct it.
+        # Keep the manifest outside the active list. The restore endpoint moves
+        # this exact file back without trusting the browser to reconstruct it.
         REMOVED_BUILDS_DIR.mkdir(parents=True, exist_ok=True)
-        discard_expired_undos()
-        undo_id = uuid.uuid4().hex
-        removed_manifest = REMOVED_BUILDS_DIR / f"{undo_id}-{build_id}.json"
+        removed_id = uuid.uuid4().hex
+        removed_manifest = REMOVED_BUILDS_DIR / f"{removed_id}-{build_id}.json"
         try:
             manifest.replace(removed_manifest)
         except OSError as e:
             return self.send_json({"error": f"could not remove build: {e}"}, status=500)
-        self.send_json({"ok": True, "undoId": undo_id, "buildId": build_id})
+        self.send_json({"ok": True, "removedId": removed_id, "buildId": build_id})
+
+    def handle_hard_delete(self, removed_id):
+        removed_manifest = removed_manifest_for(removed_id)
+        if removed_manifest is None:
+            return self.send_json({"error": "unknown removed build"}, status=404)
+        try:
+            removed_manifest.unlink()
+        except OSError as e:
+            return self.send_json({"error": f"could not permanently delete build: {e}"}, status=500)
+        self.send_json({"ok": True})
 
     def read_body(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -321,27 +369,13 @@ class Handler(BaseHTTPRequestHandler):
     def handle_restore_build(self):
         try:
             req = self.read_body()
-            undo_id = req["undoId"]
+            removed_id = req.get("removedId", req.get("undoId"))
         except Exception as e:
             return self.send_json({"error": f"bad request: {e}"}, status=400)
-        # undo_id is generated by this server and doubles as a filename stem.
-        if not isinstance(undo_id, str) or len(undo_id) != 32 or any(c not in "0123456789abcdef" for c in undo_id):
-            return self.send_json({"error": "bad undo id"}, status=400)
-        saved_manifests = list(REMOVED_BUILDS_DIR.glob(f"{undo_id}-*.json"))
-        if len(saved_manifests) != 1 or not saved_manifests[0].is_file():
-            return self.send_json({"error": "undo is no longer available"}, status=404)
-        removed_manifest = saved_manifests[0]
-        try:
-            expired = time.time() - removed_manifest.stat().st_mtime > UNDO_TTL_SECONDS
-        except FileNotFoundError:
-            return self.send_json({"error": "undo is no longer available"}, status=404)
-        if expired:
-            try:
-                removed_manifest.unlink()
-            except FileNotFoundError:
-                pass
-            return self.send_json({"error": "undo expired after 5 seconds"}, status=410)
-        build_id = removed_manifest.name[len(undo_id) + 1:-5]
+        removed_manifest = removed_manifest_for(removed_id)
+        if removed_manifest is None:
+            return self.send_json({"error": "removed build is no longer available"}, status=404)
+        build_id = removed_manifest.name[len(removed_id) + 1:-5]
         destination = BUILDS_DIR / f"{build_id}.json"
         if destination.exists():
             return self.send_json({"error": "a build with this id was published again; undo will not overwrite it"}, status=409)

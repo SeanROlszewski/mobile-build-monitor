@@ -44,6 +44,7 @@
     max-width: 340px; text-align: right;
   }
   header .right { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
+  .header-controls { display: flex; align-items: center; gap: 8px; }
   .seg {
     display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
     background: var(--panel); padding: 3px;
@@ -56,6 +57,17 @@
   }
   .seg button.active { background: var(--fg); color: #fff; }
   .seg button:not(.active):hover { color: var(--fg); }
+  [hidden] { display: none !important; }
+  .settings-trigger {
+    width: 36px; height: 36px; padding: 0; font: 20px/1 var(--font); color: var(--fg-soft); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 50%; cursor: pointer;
+  }
+  .settings-trigger:hover { color: var(--accent); border-color: var(--accent); }
+  .logs-trigger {
+    font: 500 12px var(--font); color: var(--fg-soft); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; cursor: pointer;
+  }
+  .logs-trigger:hover { color: var(--accent); border-color: var(--accent); }
   main {
     display: grid; grid-template-columns: 320px 1fr; gap: 48px;
     padding: 40px 48px 64px; max-width: 1280px;
@@ -149,6 +161,39 @@
   #recentRuns { margin-bottom: 24px; }
   #recentRuns h3 { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: .06em; margin: 0 0 10px; text-transform: uppercase; }
   #recentBuilds { display: grid; gap: 12px; }
+  #recentlyRemoved { margin-top: 24px; }
+  #recentlyRemoved summary { color: var(--dim); cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  #removedCount { color: var(--fg-soft); }
+  #removedBuilds { margin-top: 12px; }
+  button.restore, button.hard-delete { font-family: var(--font); border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer; }
+  button.restore { background: none; color: var(--fg-soft); border: 1px solid var(--border); }
+  button.restore:hover { color: var(--accent); border-color: var(--accent); }
+  button.hard-delete { background: none; color: var(--dim); border: 1px solid var(--border); }
+  button.hard-delete:hover { color: var(--bad); border-color: var(--bad); }
+  .settings-modal { position: fixed; z-index: 3; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(22, 22, 21, .24); backdrop-filter: blur(8px); }
+  .settings-dialog { width: min(100%, 620px); padding: 24px; background: var(--panel); border: 1px solid rgba(255, 255, 255, .7); border-radius: 18px; box-shadow: 0 22px 70px rgba(0, 0, 0, .22); }
+  .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  .settings-header h2 { flex: 1; margin: 0; }
+  .settings-close { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; background: none; color: var(--dim); cursor: pointer; font-size: 20px; line-height: 1; }
+  .settings-close:hover { color: var(--fg); border-color: var(--fg-soft); }
+  .settings-card { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 18px; }
+  .settings-card p { margin: 0 0 12px; color: var(--dim); font-size: 13.5px; }
+  .settings-path { display: block; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--fg-soft); font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+  main.build-detail { display: block; width: 100%; max-width: none; }
+  .detail-back {
+    font: 500 13px var(--font); color: var(--fg-soft); background: none; border: 0;
+    cursor: pointer; padding: 0; margin: 0 0 32px;
+  }
+  .detail-back:hover { color: var(--accent); }
+  .detail-summary { margin-bottom: 28px; }
+  .detail-summary .title { font-weight: 500; font-size: 26px; letter-spacing: -.02em; }
+  .detail-summary .ver { color: var(--dim); font-weight: 350; font-size: 18px; }
+  .detail-summary .line { color: var(--dim); font-size: 13px; margin-top: 6px; }
+  .detail-summary code { color: var(--fg-soft); font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+  .detail-summary a { color: var(--accent); text-decoration: none; }
+  .detail-summary a:hover { text-decoration: underline; }
+  .detail-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .detail-target { color: var(--dim); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: none; }
   main > section, .consoles, .consoles > section { min-width: 0; }
   .consoles { grid-column: 1 / -1; display: grid; gap: 28px; }
   .console {
@@ -193,29 +238,44 @@
 <header>
   <h1>Mobile App Builds</h1>
   <div class="right">
-    <div class="seg" id="osSwitch">
-      <button data-os="ios" onclick="setOS('ios')">iOS</button>
-      <button data-os="android" onclick="setOS('android')">Android</button>
+    <div class="header-controls">
+      <div class="seg" id="osSwitch">
+        <button data-os="ios" onclick="setOS('ios')">iOS</button>
+        <button data-os="android" onclick="setOS('android')">Android</button>
+      </div>
+      <button id="settingsButton" class="settings-trigger" type="button" aria-label="Settings" title="Settings" aria-controls="settingsModal" aria-expanded="false" onclick="openSettings()">&#9881;</button>
+      <button id="logsButton" class="logs-trigger" type="button" hidden onclick="showBuildDetail()">View logs</button>
     </div>
     <div class="sub">Agent-published device builds, installable and executable from the browser.</div>
   </div>
 </header>
-<main>
+<main id="buildList">
   <section>
     <h2><span>Devices</span> <button onclick="loadDevices()">Refresh</button></h2>
     <div id="devices" class="empty">loading…</div>
   </section>
   <section>
-    <h2><span>Builds</span> <button onclick="loadBuilds()">Refresh</button></h2>
+    <h2 id="buildsHeading" tabindex="-1"><span>Builds</span> <button onclick="loadBuilds()">Refresh</button></h2>
     <div id="recentRuns" hidden>
       <h3>Recently ran</h3>
       <div id="recentBuilds"></div>
     </div>
     <div id="builds" class="empty">loading…</div>
+    <details id="recentlyRemoved">
+      <summary>Recently Removed <span id="removedCount"></span></summary>
+      <div id="removedBuilds" class="empty">No removed builds.</div>
+    </details>
+  </section>
+ </main>
+<main id="buildDetail" class="build-detail" hidden>
+  <button class="detail-back" type="button" onclick="hideBuildDetail()">← Back to builds</button>
+  <section>
+    <h2><span>Build details</span><span id="detailTarget" class="detail-target"></span></h2>
+    <div id="buildDetailSummary" class="detail-summary"></div>
   </section>
   <div class="consoles">
     <section>
-      <h2><span>Install</span></h2>
+      <h2><span>Install output</span></h2>
       <pre id="installConsole" class="console">Select a device, then install a build.</pre>
     </section>
     <section>
@@ -230,22 +290,42 @@
           <button class="stop" id="stopLogs" onclick="stopAppLogs()" disabled>Stop</button>
         </span>
       </h2>
-      <pre id="appConsole" class="console">Install a build, or press Run on a build, to attach.</pre>
+      <pre id="appConsole" class="console" tabindex="0" role="log" aria-live="polite">Install a build, or press Run on a build, to attach.</pre>
     </section>
   </div>
 </main>
+<div id="settingsModal" class="settings-modal" hidden onclick="closeSettingsFromBackdrop(event)" onkeydown="handleSettingsKeydown(event)">
+  <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-header">
+      <h2 id="settingsTitle"><span>Settings</span></h2>
+      <button id="settingsClose" class="settings-close" type="button" aria-label="Close settings" onclick="closeSettings()">×</button>
+    </div>
+    <div class="settings-card">
+      <p>Published build manifests are stored in:</p>
+      <code id="buildsDirectory" class="settings-path">loading…</code>
+    </div>
+  </section>
+</div>
 <div id="undo" class="undo" hidden><span id="undoMessage"></span><button id="undoButton">Undo</button></div>
 <script>
 let selectedDevice = null;
 let installing = false;
 let logAbort = null;
 let logContext = null;
+let detailBuild = null;
 let allDevices = [];
 let allBuilds = [];
+let allRemovedBuilds = [];
 let currentOS = localStorage.getItem("wb-os") || "ios";
+let settingsReturnFocus = null;
 let undoTimer = null;
 
 function setOS(os) {
+  const detail = document.getElementById("buildDetail");
+  if (!detail.hidden) {
+    detail.hidden = true;
+    document.getElementById("buildList").hidden = false;
+  }
   currentOS = os;
   localStorage.setItem("wb-os", os);
   selectedDevice = null;
@@ -253,6 +333,106 @@ function setOS(os) {
     b.classList.toggle("active", b.dataset.os === os);
   renderDevices();
   renderBuilds();
+  renderRemovedBuilds();
+  updateLogsButton();
+}
+
+function selectedDeviceInfo() {
+  return allDevices.find(d => d.identifier === selectedDevice);
+}
+
+function renderBuildDetail() {
+  if (!detailBuild) return;
+  const b = detailBuild;
+  const device = selectedDeviceInfo();
+  const badges =
+    (b.appExists ? "" : `<span class="badge bad">artifact missing</span>`) +
+    `<span class="badge">${esc(b.scheme)}</span>`;
+  const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
+  const runCount = Number.isSafeInteger(b.runCount) && b.runCount > 0 ? b.runCount : 0;
+  const target = device
+    ? `Target: ${device.name} · ${device.marketingName || device.osVersion || "connected device"}`
+    : "Target: no device selected";
+  document.getElementById("detailTarget").textContent = target;
+  document.getElementById("buildDetailSummary").innerHTML = `
+    <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
+    <div class="line">${badges}</div>
+    <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr}</div>
+    <div class="line">built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runCount} run${runCount === 1 ? "" : "s"}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
+    ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
+    <div class="detail-actions">
+      <button class="run" type="button" title="relaunch the installed app and stream its logs">Re-run</button>
+      <button class="install" type="button" data-missing="${b.appExists ? 0 : 1}">Install</button>
+    </div>
+  `;
+  const summary = document.getElementById("buildDetailSummary");
+  summary.querySelector("button.run").onclick = () => runBuild(b);
+  summary.querySelector("button.install").onclick = () => install(b);
+  renderSelection();
+}
+
+function updateLogsButton() {
+  document.getElementById("logsButton").hidden = !detailBuild || !document.getElementById("buildDetail").hidden;
+}
+
+function showBuildDetail(build) {
+  if (build) detailBuild = build;
+  if (!detailBuild) return;
+  renderBuildDetail();
+  document.getElementById("buildList").hidden = true;
+  document.getElementById("buildDetail").hidden = false;
+  updateLogsButton();
+  window.scrollTo({ top: 0 });
+  document.querySelector("#buildDetail .detail-back").focus();
+}
+
+function hideBuildDetail() {
+  document.getElementById("buildDetail").hidden = true;
+  document.getElementById("buildList").hidden = false;
+  updateLogsButton();
+  document.getElementById("buildsHeading").focus();
+}
+
+function openSettings() {
+  const modal = document.getElementById("settingsModal");
+  settingsReturnFocus = document.activeElement;
+  modal.hidden = false;
+  document.getElementById("settingsButton").setAttribute("aria-expanded", "true");
+  document.getElementById("settingsClose").focus();
+  loadSettings();
+}
+
+function closeSettings() {
+  document.getElementById("settingsModal").hidden = true;
+  document.getElementById("settingsButton").setAttribute("aria-expanded", "false");
+  if (settingsReturnFocus instanceof HTMLElement) settingsReturnFocus.focus();
+}
+
+function closeSettingsFromBackdrop(event) {
+  if (event.target === event.currentTarget) closeSettings();
+}
+
+function handleSettingsKeydown(event) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSettings();
+  } else if (event.key === "Tab") {
+    event.preventDefault();
+    document.getElementById("settingsClose").focus();
+  }
+}
+
+async function loadSettings() {
+  const directory = document.getElementById("buildsDirectory");
+  directory.textContent = "loading…";
+  try {
+    const res = await fetch("/api/settings");
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    directory.textContent = data.buildsDirectory;
+  } catch (e) {
+    directory.textContent = "could not load settings: " + e.message;
+  }
 }
 
 function el(html) {
@@ -407,12 +587,32 @@ function renderSelection() {
 async function loadBuilds() {
   const box = document.getElementById("builds");
   try {
-    allBuilds = await (await fetch("/api/builds")).json();
+    const [buildsRes, removedRes] = await Promise.all([
+      fetch("/api/builds"), fetch("/api/removed-builds"),
+    ]);
+    allBuilds = await responseJSON(buildsRes);
+    if (!buildsRes.ok) throw new Error(allBuilds.error || buildsRes.statusText);
+    allRemovedBuilds = await responseJSON(removedRes);
+    if (!removedRes.ok) throw new Error(allRemovedBuilds.error || removedRes.statusText);
   } catch (e) {
     box.className = "empty"; box.textContent = "build listing failed: " + e.message;
     return;
   }
   renderBuilds();
+  renderRemovedBuilds();
+}
+
+function renderRemovedBuilds() {
+  const box = document.getElementById("removedBuilds");
+  const removed = allRemovedBuilds.filter(b => b.invalid || (b.os || "ios") === currentOS);
+  document.getElementById("removedCount").textContent = removed.length ? `(${removed.length})` : "";
+  box.className = ""; box.innerHTML = "";
+  if (!removed.length) {
+    box.className = "empty";
+    box.textContent = "No removed builds.";
+    return;
+  }
+  for (const build of removed) box.appendChild(removedBuildCard(build));
 }
 function renderBuilds() {
   const box = document.getElementById("builds");
@@ -440,7 +640,6 @@ function buildCard(b) {
   }
   const badges =
     (b.appExists ? "" : `<span class="badge bad">.app missing</span>`) +
-    (b.source.dirty ? `<span class="badge warn">dirty</span>` : "") +
     `<span class="badge">${esc(b.scheme)}</span>`;
   const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
   const runCount = Number.isSafeInteger(b.runCount) && b.runCount > 0 ? b.runCount : 0;
@@ -453,15 +652,15 @@ function buildCard(b) {
           <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr} · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runSummary}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
         </div>
         <div class="actions">
-          <button class="remove" title="remove from list (keeps the .app)">✕</button>
+          <button class="remove" title="move to Recently Removed (keeps the app artifact)">✕</button>
           <button class="run" title="relaunch the installed app and stream its logs">Run</button>
           <button class="install" data-missing="${b.appExists ? 0 : 1}">Install</button>
         </div>
       </div>
       ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
     </div>`);
-  card.querySelector("button.install").onclick = () => install(b);
-  card.querySelector("button.run").onclick = () => runBuild(b);
+  card.querySelector("button.install").onclick = event => install(b, event.currentTarget);
+  card.querySelector("button.run").onclick = event => runBuild(b, event.currentTarget);
   card.querySelector("button.remove").onclick = async () => {
       const button = card.querySelector("button.remove");
       button.disabled = true;
@@ -472,24 +671,7 @@ function buildCard(b) {
         if (!res.ok) throw new Error(data.error || res.statusText);
         await new Promise(resolve => setTimeout(resolve, 220));
         await loadBuilds();
-        showUndo(`${b.app.name} removed from the list.`, async () => {
-          const undoButton = document.getElementById("undoButton");
-          undoButton.disabled = true;
-          try {
-            const res = await fetch("/api/builds/restore", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ undoId: data.undoId }),
-            });
-            const result = await responseJSON(res);
-            if (!res.ok) throw new Error(result.error || res.statusText);
-            document.getElementById("undo").hidden = true;
-            document.getElementById("undo").classList.remove("visible");
-            await loadBuilds();
-          } catch (e) {
-            document.getElementById("undoMessage").textContent = "Could not restore build: " + e.message;
-            undoButton.disabled = false;
-          }
-        });
+        showUndo(`${b.app.name} moved to Recently Removed.`, () => restoreBuild(data.removedId));
       } catch (e) {
         card.classList.remove("removing");
         button.disabled = false;
@@ -499,8 +681,65 @@ function buildCard(b) {
   return card;
 }
 
+function removedBuildCard(b) {
+  if (b.invalid) {
+    return el(`<div class="card"><span class="badge bad">invalid</span>${esc(b.id)}: ${esc(b.invalid)}</div>`);
+  }
+  const card = el(`<div class="card">
+    <div class="top">
+      <div>
+        <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
+        <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code> · removed ${ago(b.removedAt)}</div>
+      </div>
+      <div class="actions">
+        <button class="restore">Restore</button>
+        <button class="hard-delete">Delete permanently</button>
+      </div>
+    </div>
+  </div>`);
+  card.querySelector("button.restore").onclick = () => restoreBuild(b.removedId, true);
+  card.querySelector("button.hard-delete").onclick = event => hardDeleteBuild(b, event.currentTarget);
+  return card;
+}
+
+async function restoreBuild(removedId, alertOnError = false) {
+  const undoButton = document.getElementById("undoButton");
+  undoButton.disabled = true;
+  try {
+    const res = await fetch("/api/builds/restore", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removedId }),
+    });
+    const result = await responseJSON(res);
+    if (!res.ok) throw new Error(result.error || res.statusText);
+    document.getElementById("undo").hidden = true;
+    document.getElementById("undo").classList.remove("visible");
+    await loadBuilds();
+  } catch (e) {
+    const message = "Could not restore build: " + e.message;
+    if (alertOnError) alert(message);
+    else document.getElementById("undoMessage").textContent = message;
+    undoButton.disabled = false;
+  }
+}
+
+async function hardDeleteBuild(build, button) {
+  if (!confirm(`Permanently delete ${build.app.name} from Recently Removed? This does not delete the app artifact.`)) return;
+  button.disabled = true;
+  try {
+    const res = await fetch("/api/removed-builds/" + encodeURIComponent(build.removedId), { method: "DELETE" });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    await loadBuilds();
+  } catch (e) {
+    alert("Could not permanently delete build: " + e.message);
+    button.disabled = false;
+  }
+}
+
 async function install(build) {
   if (!selectedDevice || installing) return;
+  showBuildDetail(build);
   installing = true; renderSelection();
   clearConsole("installConsole");
   logLine("installConsole", `installing ${build.app.name} (${build.source.branch}@${build.source.commit})…`);
@@ -526,6 +765,7 @@ async function install(build) {
 
 async function runBuild(build) {
   if (!selectedDevice || installing) return;
+  showBuildDetail(build);
   try {
     const res = await fetch("/api/builds/" + encodeURIComponent(build.id) + "/run", { method: "POST" });
     const data = await responseJSON(res);
@@ -533,6 +773,7 @@ async function runBuild(build) {
     build.runCount = data.runCount;
     build.lastRunAt = data.lastRunAt;
     renderBuilds();
+    renderBuildDetail();
     startAppLogs(build);
   } catch (e) {
     logLine("appConsole", "could not start run: " + e.message, "err");
@@ -542,6 +783,9 @@ async function runBuild(build) {
 
 async function startAppLogs(build) {
   if (!selectedDevice) return;
+  detailBuild = build;
+  renderBuildDetail();
+  updateLogsButton();
   stopAppLogs();
   const abort = new AbortController();
   logAbort = abort;
