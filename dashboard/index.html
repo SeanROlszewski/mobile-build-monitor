@@ -6,22 +6,103 @@
 <title>Mobile App Builds</title>
 <style>
   :root {
-    --bg: #f9f9f8;          /* warm off-white */
-    --panel: #ffffff;
-    --border: #e1dfda;       /* hairline warm gray */
-    --border-soft: #e7e5e2;
-    --fg: #161615;           /* near-black, warm */
-    --fg-soft: #373635;
-    --dim: #696969;
-    --accent: #ff642e;       /* orange */
-    --accent-press: #e5541f;
-    --ok: #2da44e;
-    --warn: #e3a008;
-    --bad: #d1242f;
-    --console-bg: #161615;
-    --console-fg: #e7e5e2;
+    color-scheme: light;
+    --surface-canvas: #f9f9f8;
+    --surface-raised: #ffffff;
+    --surface-subtle: #f3f2f0;
+    --border-strong: #e1dfda;
+    --border-subtle: #e7e5e2;
+    --text-primary: #161615;
+    --text-secondary: #373635;
+    --text-muted: #696969;
+    --accent: #ff642e;
+    --accent-pressed: #e5541f;
+    --on-accent: #ffffff;
+    --status-success: #2da44e;
+    --status-warning: #b77600;
+    --status-danger: #c33a3a;
+    --console-surface: #161615;
+    --console-text: #e7e5e2;
+    --console-success: #7ee2a8;
+    --console-danger: #ff8a7a;
+    --console-meta: #8b949e;
+    --overlay: rgba(22, 22, 21, .24);
+    --dialog-border: rgba(255, 255, 255, .7);
+    --elevation: 0 22px 70px rgba(0, 0, 0, .22);
+    --floating-elevation: 0 8px 30px rgba(0, 0, 0, .28);
+    --accent-halo: rgba(255, 100, 46, .25);
+    /* Compatibility aliases keep every component on the shared token layer. */
+    --bg: var(--surface-canvas);
+    --panel: var(--surface-raised);
+    --border: var(--border-strong);
+    --border-soft: var(--border-subtle);
+    --fg: var(--text-primary);
+    --fg-soft: var(--text-secondary);
+    --dim: var(--text-muted);
+    --accent-press: var(--accent-pressed);
+    --ok: var(--status-success);
+    --warn: var(--status-warning);
+    --bad: var(--status-danger);
+    --console-bg: var(--console-surface);
+    --console-fg: var(--console-text);
     --font: "TWK Lausanne", "GT America", -apple-system, "SF Pro Display",
             "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-canvas: #141413;
+    --surface-raised: #1d1d1b;
+    --surface-subtle: #272725;
+    --border-strong: #41413e;
+    --border-subtle: #30302e;
+    --text-primary: #f4f3ef;
+    --text-secondary: #d2d0ca;
+    --text-muted: #aaa8a1;
+    --accent: #ff8056;
+    --accent-pressed: #ff9a76;
+    --on-accent: #24120b;
+    --status-success: #6ed18d;
+    --status-warning: #f0bc50;
+    --status-danger: #ff8882;
+    --console-surface: #0e0e0d;
+    --console-text: #e8e6e0;
+    --console-success: #8ce9ae;
+    --console-danger: #ff9d91;
+    --console-meta: #aaaeb6;
+    --overlay: rgba(0, 0, 0, .52);
+    --dialog-border: rgba(255, 255, 255, .12);
+    --elevation: 0 22px 70px rgba(0, 0, 0, .48);
+    --floating-elevation: 0 8px 30px rgba(0, 0, 0, .5);
+    --accent-halo: rgba(255, 128, 86, .3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="system"] {
+      color-scheme: dark;
+      --surface-canvas: #141413;
+      --surface-raised: #1d1d1b;
+      --surface-subtle: #272725;
+      --border-strong: #41413e;
+      --border-subtle: #30302e;
+      --text-primary: #f4f3ef;
+      --text-secondary: #d2d0ca;
+      --text-muted: #aaa8a1;
+      --accent: #ff8056;
+      --accent-pressed: #ff9a76;
+      --on-accent: #24120b;
+      --status-success: #6ed18d;
+      --status-warning: #f0bc50;
+      --status-danger: #ff8882;
+      --console-surface: #0e0e0d;
+      --console-text: #e8e6e0;
+      --console-success: #8ce9ae;
+      --console-danger: #ff9d91;
+      --console-meta: #aaaeb6;
+      --overlay: rgba(0, 0, 0, .52);
+      --dialog-border: rgba(255, 255, 255, .12);
+      --elevation: 0 22px 70px rgba(0, 0, 0, .48);
+      --floating-elevation: 0 8px 30px rgba(0, 0, 0, .5);
+      --accent-halo: rgba(255, 128, 86, .3);
+    }
   }
   * { box-sizing: border-box; }
   body {
@@ -55,7 +136,7 @@
     border-radius: 999px; padding: 6px 18px; cursor: pointer;
     transition: background .15s, color .15s;
   }
-  .seg button.active { background: var(--fg); color: #fff; }
+  .seg button.active { background: var(--fg); color: var(--on-accent); }
   .seg button:not(.active):hover { color: var(--fg); }
   [hidden] { display: none !important; }
   .settings-trigger {
@@ -142,27 +223,53 @@
     font-size: 13.5px; color: var(--fg-soft); white-space: pre-wrap;
   }
   .actions { display: flex; gap: 8px; flex: none; align-items: center; }
-  button.install, button.run {
+  button.install {
     font-family: var(--font); border-radius: 999px;
     padding: 9px 22px; font-weight: 500; font-size: 14px; cursor: pointer;
     transition: background .15s, color .15s, border-color .15s;
   }
-  button.install { background: var(--accent); color: #fff; border: none; }
+  button.install { background: var(--accent); color: var(--on-accent); border: none; }
   button.install:hover:not(:disabled) { background: var(--accent-press); }
-  button.run { background: none; color: var(--fg-soft); border: 1px solid var(--border); }
-  button.run:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-  button.install:disabled, button.run:disabled { opacity: .35; cursor: not-allowed; }
+  button.install:disabled { opacity: .35; cursor: not-allowed; }
+  .card-pr {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px;
+    color: var(--fg-soft); font: 500 12px var(--font); text-decoration: none;
+  }
+  .card-pr:hover { color: var(--accent); border-color: var(--accent); }
+  .worktree-group + .worktree-group { margin-top: 20px; }
+  .worktree-group summary { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; color: var(--dim); cursor: pointer; list-style: none; min-width: 0; }
+  .worktree-group summary::-webkit-details-marker { display: none; }
+  .worktree-group summary::before { content: "›"; flex: none; color: var(--fg-soft); font-size: 17px; line-height: .75; transform: rotate(0deg); transition: transform .15s ease; }
+  .worktree-group[open] summary::before { transform: rotate(90deg); }
+  .worktree-heading { display: flex; align-items: baseline; gap: 10px; min-width: 0; width: 100%; }
+  .worktree-heading .field-label { flex: none; }
+  .worktree-heading code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-soft); font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+  .worktree-count { flex: none; color: var(--dim); font-size: 11px; }
+  #buildFilter { width: 220px; }
   button.remove {
     font-family: var(--font);
     background: none; border: 1px solid var(--border); color: var(--dim);
     border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer;
   }
   button.remove:hover { color: var(--bad); border-color: var(--bad); }
+  #currentRun { margin-bottom: 24px; }
+  #currentRun h3 { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: .06em; margin: 0 0 10px; text-transform: uppercase; }
+  .current-run-card { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+  .current-run-status { color: var(--ok); font-size: 12px; }
+  .view-logs {
+    padding: 9px 14px; border: 1px solid var(--ok); border-radius: 999px;
+    background: none; color: var(--ok); font: 500 12px var(--font); cursor: pointer;
+  }
+  .view-logs:hover { background: color-mix(in srgb, var(--ok) 8%, transparent); }
   #recentRuns { margin-bottom: 24px; }
   #recentRuns h3 { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: .06em; margin: 0 0 10px; text-transform: uppercase; }
   #recentBuilds { display: grid; gap: 12px; }
   #recentlyRemoved { margin-top: 24px; }
-  #recentlyRemoved summary { color: var(--dim); cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  #recentlyRemoved summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--dim); cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  #recentlyRemoved summary::marker { display: none; }
+  .clear-removed { padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--dim); font: 500 11px var(--font); letter-spacing: 0; text-transform: none; cursor: pointer; }
+  .clear-removed:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+  .clear-removed:disabled { opacity: .45; cursor: not-allowed; }
   #removedCount { color: var(--fg-soft); }
   #removedBuilds { margin-top: 12px; }
   button.restore, button.hard-delete { font-family: var(--font); border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer; }
@@ -170,15 +277,35 @@
   button.restore:hover { color: var(--accent); border-color: var(--accent); }
   button.hard-delete { background: none; color: var(--dim); border: 1px solid var(--border); }
   button.hard-delete:hover { color: var(--bad); border-color: var(--bad); }
-  .settings-modal { position: fixed; z-index: 3; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(22, 22, 21, .24); backdrop-filter: blur(8px); }
-  .settings-dialog { width: min(100%, 620px); padding: 24px; background: var(--panel); border: 1px solid rgba(255, 255, 255, .7); border-radius: 18px; box-shadow: 0 22px 70px rgba(0, 0, 0, .22); }
+  .settings-modal { position: fixed; z-index: 3; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--overlay); backdrop-filter: blur(8px); }
+  .settings-dialog { width: min(100%, 620px); padding: 24px; background: var(--panel); border: 1px solid var(--dialog-border); border-radius: 18px; box-shadow: var(--elevation); }
   .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
   .settings-header h2 { flex: 1; margin: 0; }
   .settings-close { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; background: none; color: var(--dim); cursor: pointer; font-size: 20px; line-height: 1; }
   .settings-close:hover { color: var(--fg); border-color: var(--fg-soft); }
   .settings-card { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 18px; }
+  .settings-card + .settings-card { margin-top: 14px; }
   .settings-card p { margin: 0 0 12px; color: var(--dim); font-size: 13.5px; }
+  .settings-card h3 { margin: 0 0 7px; font-size: 15px; font-weight: 550; }
   .settings-path { display: block; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--fg-soft); font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+  .settings-form { display: grid; gap: 12px; margin-top: 16px; }
+  .settings-form label { display: grid; gap: 6px; color: var(--fg-soft); font-size: 12px; font-weight: 500; }
+  .settings-form input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); font: 13px ui-monospace, "SF Mono", Menlo, monospace; }
+  .settings-form select { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); font: 13px var(--font); }
+  .settings-form input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; border-color: var(--accent); }
+  .settings-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .settings-actions button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--fg-soft); font: 500 12px var(--font); cursor: pointer; }
+  .settings-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .settings-actions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .settings-actions button.primary:hover:not(:disabled) { background: var(--accent-press); color: var(--on-accent); }
+  .settings-actions button:disabled { opacity: .45; cursor: not-allowed; }
+  .settings-status { min-height: 1.3em; margin: 0; color: var(--dim); font-size: 12px; }
+  .settings-status.ok { color: var(--ok); }
+  .settings-status.bad { color: var(--bad); }
+  .mock-data-toggle { display: flex; align-items: flex-start; gap: 10px; color: var(--fg-soft); font-size: 13px; cursor: pointer; }
+  .mock-data-toggle input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+  .mock-data-toggle span { display: grid; gap: 2px; }
+  .mock-data-toggle small { color: var(--dim); font-size: 12px; }
   main.build-detail { display: block; width: 100%; max-width: none; }
   .detail-back {
     font: 500 13px var(--font); color: var(--fg-soft); background: none; border: 0;
@@ -186,14 +313,20 @@
   }
   .detail-back:hover { color: var(--accent); }
   .detail-summary { margin-bottom: 28px; }
+  .detail-title-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
   .detail-summary .title { font-weight: 500; font-size: 26px; letter-spacing: -.02em; }
   .detail-summary .ver { color: var(--dim); font-weight: 350; font-size: 18px; }
   .detail-summary .line { color: var(--dim); font-size: 13px; margin-top: 6px; }
   .detail-summary code { color: var(--fg-soft); font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
   .detail-summary a { color: var(--accent); text-decoration: none; }
   .detail-summary a:hover { text-decoration: underline; }
-  .detail-actions { display: flex; gap: 8px; margin-top: 20px; }
-  .detail-target { color: var(--dim); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: none; }
+  .detail-meta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; }
+  .detail-context { display: grid; gap: 8px; margin-top: 16px; }
+  .detail-field { color: var(--dim); font-size: 12px; }
+  .field-label { color: var(--dim); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .detail-pr { display: inline-block; padding: 8px 12px; border-radius: 999px; background: var(--accent); color: var(--on-accent) !important; font: 500 12px var(--font); }
+  .detail-pr:hover { background: var(--accent-press); text-decoration: none !important; }
+  .detail-actions { display: flex; gap: 8px; flex: none; }
   main > section, .consoles, .consoles > section { min-width: 0; }
   .consoles { grid-column: 1 / -1; display: grid; gap: 28px; }
   .console {
@@ -206,18 +339,18 @@
   }
   #installConsole { min-height: 72px; max-height: 220px; }
   #appConsole { min-height: 140px; max-height: 420px; }
-  .console .ok { color: #7ee2a8; }
-  .console .err { color: #ff8a7a; }
-  .console .meta-line { color: #8b949e; }
+  .console .ok { color: var(--console-success); }
+  .console .err { color: var(--console-danger); }
+  .console .meta-line { color: var(--console-meta); }
   .empty { color: var(--dim); font-size: 13.5px; padding: 6px 2px; }
   .undo {
     position: fixed; z-index: 2; left: 50%; bottom: 24px; transform: translateX(-50%);
     display: flex; align-items: center; gap: 14px; padding: 11px 14px 11px 18px;
     background: var(--console-bg); color: var(--console-fg); border-radius: 999px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, .28); font-size: 13px;
+    box-shadow: var(--floating-elevation); font-size: 13px;
   }
   .undo[hidden] { display: none; }
-  .undo button { border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; color: #fff; background: var(--accent); font: 500 13px var(--font); }
+  .undo button { border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; color: var(--on-accent); background: var(--accent); font: 500 13px var(--font); }
   .undo button:hover:not(:disabled) { background: var(--accent-press); }
   .undo button:disabled { opacity: .6; cursor: wait; }
   .undo.visible { animation: undo-enter .42s cubic-bezier(.16, 1, .3, 1); }
@@ -227,12 +360,20 @@
     to { opacity: 1; transform: translate(-50%, 0) scale(1); }
   }
   @keyframes undo-pulse {
-    50% { box-shadow: 0 0 0 6px rgba(255, 100, 46, .25); }
+    50% { box-shadow: 0 0 0 6px var(--accent-halo); }
   }
   @media (prefers-reduced-motion: reduce) {
     .card, .undo.visible, .undo.visible button { transition: none; animation: none; }
   }
 </style>
+<script>
+  try {
+    const savedTheme = localStorage.getItem("mbm-theme");
+    document.documentElement.dataset.theme = ["light", "dark", "system"].includes(savedTheme) ? savedTheme : "system";
+  } catch (_) {
+    document.documentElement.dataset.theme = "system";
+  }
+</script>
 </head>
 <body>
 <header>
@@ -244,7 +385,7 @@
         <button data-os="android" onclick="setOS('android')">Android</button>
       </div>
       <button id="settingsButton" class="settings-trigger" type="button" aria-label="Settings" title="Settings" aria-controls="settingsModal" aria-expanded="false" onclick="openSettings()">&#9881;</button>
-      <button id="logsButton" class="logs-trigger" type="button" hidden onclick="showBuildDetail()">View logs</button>
+      <button id="logsButton" class="logs-trigger" type="button" hidden onclick="showActiveLogs()">View live logs</button>
     </div>
     <div class="sub">Agent-published device builds, installable and executable from the browser.</div>
   </div>
@@ -255,14 +396,21 @@
     <div id="devices" class="empty">loading…</div>
   </section>
   <section>
-    <h2 id="buildsHeading" tabindex="-1"><span>Builds</span> <button onclick="loadBuilds()">Refresh</button></h2>
+    <h2 id="buildsHeading" tabindex="-1"><span>Builds</span><span class="tools"><input id="buildFilter" class="search" type="search" placeholder="filter worktrees & builds…" aria-label="Filter worktrees and builds" oninput="setBuildFilter(this.value)"><button onclick="loadBuilds()">Refresh</button></span></h2>
+    <div id="currentRun" hidden>
+      <h3>Currently running</h3>
+      <div id="currentRunBuild"></div>
+    </div>
     <div id="recentRuns" hidden>
       <h3>Recently ran</h3>
       <div id="recentBuilds"></div>
     </div>
     <div id="builds" class="empty">loading…</div>
     <details id="recentlyRemoved">
-      <summary>Recently Removed <span id="removedCount"></span></summary>
+      <summary>
+        <span>Recently Removed <span id="removedCount"></span></span>
+        <button id="clearRemoved" class="clear-removed" type="button" hidden onclick="clearRemovedBuilds(event)">Clear all</button>
+      </summary>
       <div id="removedBuilds" class="empty">No removed builds.</div>
     </details>
   </section>
@@ -270,13 +418,12 @@
 <main id="buildDetail" class="build-detail" hidden>
   <button class="detail-back" type="button" onclick="hideBuildDetail()">← Back to builds</button>
   <section>
-    <h2><span>Build details</span><span id="detailTarget" class="detail-target"></span></h2>
     <div id="buildDetailSummary" class="detail-summary"></div>
   </section>
   <div class="consoles">
     <section>
-      <h2><span>Install output</span></h2>
-      <pre id="installConsole" class="console">Select a device, then install a build.</pre>
+      <h2><span>Install &amp; Run output</span></h2>
+      <pre id="installConsole" class="console">Select a device, then install and run a build.</pre>
     </section>
     <section>
       <h2>
@@ -290,7 +437,7 @@
           <button class="stop" id="stopLogs" onclick="stopAppLogs()" disabled>Stop</button>
         </span>
       </h2>
-      <pre id="appConsole" class="console" tabindex="0" role="log" aria-live="polite">Install a build, or press Run on a build, to attach.</pre>
+      <pre id="appConsole" class="console" tabindex="0" role="log" aria-live="polite">Install &amp; Run a build to attach.</pre>
     </section>
   </div>
 </main>
@@ -304,6 +451,45 @@
       <p>Published build manifests are stored in:</p>
       <code id="buildsDirectory" class="settings-path">loading…</code>
     </div>
+    <div class="settings-card">
+      <h3>Remote builder <span class="field-label">optional</span></h3>
+      <p>Use an SSH config alias. Credentials remain in <code>~/.ssh</code>; the dashboard never stores a password or private key.</p>
+      <form class="settings-form" onsubmit="saveRemoteBuilder(event)">
+        <label>SSH host alias
+          <input id="remoteBuilderHost" type="text" autocomplete="off" spellcheck="false" placeholder="mobile-builder" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" maxlength="254">
+        </label>
+        <label>Builder directory
+          <input id="remoteBuilderDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="/Users/you/.mobile-build-monitor" maxlength="1024">
+        </label>
+        <div class="settings-actions">
+          <button id="saveRemoteBuilder" class="primary" type="submit">Save builder</button>
+          <button id="checkRemoteBuilder" type="button" onclick="checkRemoteBuilder()">Check connection</button>
+        </div>
+        <p id="remoteBuilderStatus" class="settings-status" role="status"></p>
+      </form>
+    </div>
+    <div class="settings-card">
+      <h3>Appearance</h3>
+      <p>Choose how the dashboard should appear on this Mac.</p>
+      <div class="settings-form">
+        <label>Color theme
+          <select id="themeSelect" onchange="setTheme(this.value)">
+            <option value="system">Use system setting</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="settings-card">
+      <h3>Mock data</h3>
+      <p>Preview dashboard states without reading, changing, or installing any real build.</p>
+      <label class="mock-data-toggle">
+        <input id="mockDataEnabled" type="checkbox" onchange="setMockDataEnabled(this.checked)">
+        <span>Use mock dashboard data<small>Includes repeated worktrees, recent runs, recently removed builds, mock devices, and simulated live logs.</small></span>
+      </label>
+      <p id="mockDataStatus" class="settings-status" role="status"></p>
+    </div>
   </section>
 </div>
 <div id="undo" class="undo" hidden><span id="undoMessage"></span><button id="undoButton">Undo</button></div>
@@ -312,6 +498,8 @@ let selectedDevice = null;
 let installing = false;
 let logAbort = null;
 let logContext = null;
+let activeLogBuild = null;
+let activeLogDevice = null;
 let detailBuild = null;
 let allDevices = [];
 let allBuilds = [];
@@ -319,12 +507,31 @@ let allRemovedBuilds = [];
 let currentOS = localStorage.getItem("wb-os") || "ios";
 let settingsReturnFocus = null;
 let undoTimer = null;
+let buildFilter = "";
+const collapsedWorktrees = new Set();
+
+function savedTheme() {
+  try {
+    const theme = localStorage.getItem("mbm-theme");
+    return ["light", "dark", "system"].includes(theme) ? theme : "system";
+  } catch (_) {
+    return "system";
+  }
+}
+
+function setTheme(theme) {
+  const nextTheme = ["light", "dark", "system"].includes(theme) ? theme : "system";
+  document.documentElement.dataset.theme = nextTheme;
+  document.getElementById("themeSelect").value = nextTheme;
+  try { localStorage.setItem("mbm-theme", nextTheme); } catch (_) {}
+}
 
 function setOS(os) {
   const detail = document.getElementById("buildDetail");
   if (!detail.hidden) {
     detail.hidden = true;
     document.getElementById("buildList").hidden = false;
+    document.getElementById("osSwitch").hidden = false;
   }
   currentOS = os;
   localStorage.setItem("wb-os", os);
@@ -345,34 +552,44 @@ function renderBuildDetail() {
   if (!detailBuild) return;
   const b = detailBuild;
   const device = selectedDeviceInfo();
-  const badges =
-    (b.appExists ? "" : `<span class="badge bad">artifact missing</span>`) +
-    `<span class="badge">${esc(b.scheme)}</span>`;
-  const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
+  const artifactBadge = b.appExists ? "" : `<span class="badge bad">artifact missing</span>`;
+  const prLink = b.source.pr
+    ? `<a class="detail-pr" href="${esc(b.source.pr)}" target="_blank" rel="noopener noreferrer">View pull request ↗</a>`
+    : "";
   const runCount = Number.isSafeInteger(b.runCount) && b.runCount > 0 ? b.runCount : 0;
   const target = device
-    ? `Target: ${device.name} · ${device.marketingName || device.osVersion || "connected device"}`
-    : "Target: no device selected";
-  document.getElementById("detailTarget").textContent = target;
+    ? (device.marketingName || device.name || device.osVersion || "connected device")
+    : "no device selected";
   document.getElementById("buildDetailSummary").innerHTML = `
-    <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
-    <div class="line">${badges}</div>
-    <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr}</div>
-    <div class="line">built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runCount} run${runCount === 1 ? "" : "s"}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
-    ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
-    <div class="detail-actions">
-      <button class="run" type="button" title="relaunch the installed app and stream its logs">Re-run</button>
-      <button class="install" type="button" data-missing="${b.appExists ? 0 : 1}">Install</button>
+    <div class="detail-title-row">
+      <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
+      <div class="detail-actions">
+        <button class="install" type="button" data-missing="${b.appExists ? 0 : 1}">Install &amp; Run</button>
+      </div>
     </div>
+    <div class="detail-meta-row">
+      <div class="line">built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runCount} run${runCount === 1 ? "" : "s"}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
+      ${prLink}
+    </div>
+    ${artifactBadge ? `<div class="line">${artifactBadge}</div>` : ""}
+    <div class="detail-context">
+      <div class="detail-field"><span class="field-label">Scheme</span> <code>${esc(b.scheme)}</code></div>
+      <div class="detail-field"><span class="field-label">Target</span> <code>${esc(target)}</code></div>
+    </div>
+    <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code></div>
+    ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
   `;
   const summary = document.getElementById("buildDetailSummary");
-  summary.querySelector("button.run").onclick = () => runBuild(b);
   summary.querySelector("button.install").onclick = () => install(b);
   renderSelection();
 }
 
 function updateLogsButton() {
-  document.getElementById("logsButton").hidden = !detailBuild || !document.getElementById("buildDetail").hidden;
+  document.getElementById("logsButton").hidden = !activeLogBuild || !document.getElementById("buildDetail").hidden;
+}
+
+function showActiveLogs() {
+  if (activeLogBuild) showBuildDetail(activeLogBuild);
 }
 
 function showBuildDetail(build) {
@@ -381,14 +598,18 @@ function showBuildDetail(build) {
   renderBuildDetail();
   document.getElementById("buildList").hidden = true;
   document.getElementById("buildDetail").hidden = false;
+  document.getElementById("osSwitch").hidden = true;
   updateLogsButton();
   window.scrollTo({ top: 0 });
   document.querySelector("#buildDetail .detail-back").focus();
 }
 
 function hideBuildDetail() {
+  // The fetch stream is deliberately left attached. The Currently running card
+  // and header control return to this same console without starting another one.
   document.getElementById("buildDetail").hidden = true;
   document.getElementById("buildList").hidden = false;
+  document.getElementById("osSwitch").hidden = false;
   updateLogsButton();
   document.getElementById("buildsHeading").focus();
 }
@@ -417,21 +638,125 @@ function handleSettingsKeydown(event) {
     event.preventDefault();
     closeSettings();
   } else if (event.key === "Tab") {
-    event.preventDefault();
-    document.getElementById("settingsClose").focus();
+    const modal = document.getElementById("settingsModal");
+    const focusable = [...modal.querySelectorAll("button:not(:disabled), input:not(:disabled)")];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 }
 
 async function loadSettings() {
   const directory = document.getElementById("buildsDirectory");
+  const host = document.getElementById("remoteBuilderHost");
+  const builderDirectory = document.getElementById("remoteBuilderDirectory");
+  const status = document.getElementById("remoteBuilderStatus");
+  const mockData = document.getElementById("mockDataEnabled");
+  const mockStatus = document.getElementById("mockDataStatus");
+  document.getElementById("themeSelect").value = savedTheme();
   directory.textContent = "loading…";
+  status.textContent = "";
+  status.className = "settings-status";
   try {
     const res = await fetch("/api/settings");
     const data = await responseJSON(res);
     if (!res.ok) throw new Error(data.error || res.statusText);
     directory.textContent = data.buildsDirectory;
+    host.value = data.remoteBuilder?.sshHost || "";
+    builderDirectory.value = data.remoteBuilder?.directory || "";
+    mockData.checked = data.mockDataEnabled === true;
+    mockStatus.textContent = mockData.checked ? "Mock data is active. Real builds and devices are hidden." : "";
+    mockStatus.className = "settings-status" + (mockData.checked ? " ok" : "");
   } catch (e) {
     directory.textContent = "could not load settings: " + e.message;
+    status.textContent = "Remote builder settings unavailable.";
+    status.className = "settings-status bad";
+  }
+}
+
+async function setMockDataEnabled(enabled) {
+  const checkbox = document.getElementById("mockDataEnabled");
+  const status = document.getElementById("mockDataStatus");
+  checkbox.disabled = true;
+  status.textContent = "Switching data source…";
+  status.className = "settings-status";
+  try {
+    const res = await fetch("/api/settings/mock-data", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    stopAppLogs();
+    activeLogBuild = null;
+    activeLogDevice = null;
+    detailBuild = null;
+    selectedDevice = null;
+    hideBuildDetail();
+    await Promise.all([loadDevices(), loadBuilds()]);
+    status.textContent = enabled ? "Mock data is active. Real builds and devices are hidden." : "Showing real local builds and devices.";
+    status.className = "settings-status ok";
+  } catch (e) {
+    checkbox.checked = !enabled;
+    status.textContent = "Could not switch mock data: " + e.message;
+    status.className = "settings-status bad";
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+function setRemoteBuilderStatus(message, tone = "") {
+  const status = document.getElementById("remoteBuilderStatus");
+  status.textContent = message;
+  status.className = "settings-status" + (tone ? " " + tone : "");
+}
+
+function remoteBuilderInput() {
+  return {
+    sshHost: document.getElementById("remoteBuilderHost").value.trim(),
+    directory: document.getElementById("remoteBuilderDirectory").value.trim(),
+  };
+}
+
+async function saveRemoteBuilder(event) {
+  event.preventDefault();
+  const button = document.getElementById("saveRemoteBuilder");
+  button.disabled = true;
+  setRemoteBuilderStatus("Saving…");
+  try {
+    const res = await fetch("/api/remote-builder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(remoteBuilderInput()),
+    });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    setRemoteBuilderStatus("Builder saved.", "ok");
+  } catch (e) {
+    setRemoteBuilderStatus("Could not save builder: " + e.message, "bad");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function checkRemoteBuilder() {
+  const button = document.getElementById("checkRemoteBuilder");
+  button.disabled = true;
+  setRemoteBuilderStatus("Checking SSH connection…");
+  try {
+    const res = await fetch("/api/remote-builder/check", { method: "POST" });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    setRemoteBuilderStatus(data.message, data.reachable && data.directoryReady ? "ok" : "bad");
+  } catch (e) {
+    setRemoteBuilderStatus("Could not check builder: " + e.message, "bad");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -580,8 +905,6 @@ function renderSelection() {
     n.classList.toggle("selected", n.dataset.id === selectedDevice);
   for (const b of document.querySelectorAll("button.install"))
     b.disabled = installing || !selectedDevice || b.dataset.missing === "1";
-  for (const b of document.querySelectorAll("button.run"))
-    b.disabled = installing || !selectedDevice;
 }
 
 async function loadBuilds() {
@@ -606,6 +929,7 @@ function renderRemovedBuilds() {
   const box = document.getElementById("removedBuilds");
   const removed = allRemovedBuilds.filter(b => b.invalid || (b.os || "ios") === currentOS);
   document.getElementById("removedCount").textContent = removed.length ? `(${removed.length})` : "";
+  document.getElementById("clearRemoved").hidden = allRemovedBuilds.length === 0;
   box.className = ""; box.innerHTML = "";
   if (!removed.length) {
     box.className = "empty";
@@ -619,48 +943,137 @@ function renderBuilds() {
   const recentBox = document.getElementById("recentBuilds");
   const recentSection = document.getElementById("recentRuns");
   const builds = allBuilds.filter(b => b.invalid || (b.os || "ios") === currentOS);
+  renderCurrentRun();
   box.className = ""; box.innerHTML = "";
   recentBox.innerHTML = "";
   const recentlyRan = builds
     .filter(b => !b.invalid && Number.isFinite(Date.parse(b.lastRunAt)))
     .sort((a, b) => Date.parse(b.lastRunAt) - Date.parse(a.lastRunAt));
-  recentSection.hidden = recentlyRan.length === 0;
+  recentSection.hidden = Boolean(buildFilter) || recentlyRan.length === 0;
   for (const build of recentlyRan) recentBox.appendChild(buildCard(build));
   if (!builds.length) {
     box.className = "empty";
     box.textContent = `no published ${currentOS === "android" ? "Android" : "iOS"} builds — agents publish via ~/.mobile-build-monitor/bin/publish-build`;
     return;
   }
-  for (const b of builds) box.appendChild(buildCard(b));
+  const worktreeGroups = new Map();
+  for (const build of builds) {
+    const worktree = build.invalid ? "Invalid build manifests" : (build.source?.worktree || "Unknown worktree");
+    if (!worktreeGroups.has(worktree)) worktreeGroups.set(worktree, []);
+    worktreeGroups.get(worktree).push(build);
+  }
+  const buildTime = build => {
+    const timestamp = Date.parse(build.publishedAt || build.builtAt);
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
+  const query = buildFilter.toLowerCase();
+  const matchesBuild = build => [
+    build.id, build.app?.name, build.app?.version, build.app?.buildNumber,
+    build.scheme, build.configuration, build.source?.worktree, build.source?.branch,
+    build.source?.commit, build.source?.pr, build.notes,
+  ].filter(Boolean).join("\n").toLowerCase().includes(query);
+  const groups = [...worktreeGroups.entries()]
+    .map(([worktree, groupBuilds]) => {
+      const sortedBuilds = groupBuilds.sort((a, b) => buildTime(b) - buildTime(a));
+      const worktreeMatches = worktree.toLowerCase().includes(query);
+      const visibleBuilds = query && !worktreeMatches
+        ? sortedBuilds.filter(matchesBuild)
+        : sortedBuilds;
+      return { worktree, builds: visibleBuilds, totalCount: sortedBuilds.length };
+    })
+    .filter(group => group.builds.length)
+    .sort((a, b) => buildTime(b.builds[0]) - buildTime(a.builds[0]));
+  if (!groups.length) {
+    box.className = "empty";
+    box.textContent = `no builds match “${buildFilter}”`;
+    return;
+  }
+  for (const group of groups) {
+    const label = group.worktree;
+    const count = group.builds.length;
+    const countLabel = count === group.totalCount
+      ? `${count} build${count === 1 ? "" : "s"}`
+      : `${count} of ${group.totalCount} builds`;
+    const groupNode = el(`<details class="worktree-group">
+      <summary>
+        <span class="worktree-heading">
+          <span class="field-label">Worktree</span>
+          <code title="${esc(label)}">${esc(label)}</code>
+          <span class="worktree-count">${countLabel}</span>
+        </span>
+      </summary>
+    </details>`);
+    groupNode.open = Boolean(query) || !collapsedWorktrees.has(label);
+    groupNode.addEventListener("toggle", () => {
+      if (groupNode.open) collapsedWorktrees.delete(label);
+      else collapsedWorktrees.add(label);
+    });
+    for (const build of group.builds) groupNode.appendChild(buildCard(build));
+    box.appendChild(groupNode);
+  }
   renderSelection();
+}
+
+function setBuildFilter(value) {
+  buildFilter = value.trim();
+  renderBuilds();
+}
+
+function renderCurrentRun() {
+  const section = document.getElementById("currentRun");
+  const box = document.getElementById("currentRunBuild");
+  box.innerHTML = "";
+  if (!activeLogBuild || !logAbort) {
+    section.hidden = true;
+    return;
+  }
+  const build = activeLogBuild;
+  const device = allDevices.find(d => d.identifier === activeLogDevice);
+  const deviceName = device
+    ? (device.marketingName || device.name || "connected device")
+    : "connected device";
+  const card = el(`<div class="card current-run-card">
+    <div class="top">
+      <div>
+        <div class="title">${esc(build.app.name)} <span class="ver">${esc(build.app.version)} (${esc(build.app.buildNumber)})</span></div>
+        <div class="line"><span class="field-label">Scheme</span> <code>${esc(build.scheme)}</code></div>
+        <div class="line current-run-status">Live logs attached · ${esc(deviceName)}</div>
+      </div>
+      <button class="view-logs" type="button">View live logs</button>
+    </div>
+  </div>`);
+  card.querySelector("button.view-logs").onclick = showActiveLogs;
+  box.appendChild(card);
+  section.hidden = false;
 }
 function buildCard(b) {
   if (b.invalid) {
     return el(`<div class="card"><span class="badge bad">invalid</span>${esc(b.id)}: ${esc(b.invalid)}</div>`);
   }
   const badges =
-    (b.appExists ? "" : `<span class="badge bad">.app missing</span>`) +
-    `<span class="badge">${esc(b.scheme)}</span>`;
-  const pr = b.source.pr ? ` · <a href="${esc(b.source.pr)}" target="_blank">PR</a>` : "";
+    (b.appExists ? "" : `<span class="badge bad">.app missing</span>`);
+  const prLink = b.source.pr
+    ? `<a class="card-pr" href="${esc(b.source.pr)}" target="_blank" rel="noopener noreferrer">View pull request ↗</a>`
+    : "";
   const runCount = Number.isSafeInteger(b.runCount) && b.runCount > 0 ? b.runCount : 0;
   const runSummary = `${runCount} run${runCount === 1 ? "" : "s"}`;
   const card = el(`<div class="card">
       <div class="top">
         <div>
           <div class="title">${esc(b.app.name)} <span class="ver">${esc(b.app.version)} (${esc(b.app.buildNumber)})</span></div>
-          <div class="line">${badges}</div>
-          <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code>${pr} · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runSummary}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
+          ${badges ? `<div class="line">${badges}</div>` : ""}
+          <div class="line"><span class="field-label">Scheme</span> <code>${esc(b.scheme)}</code></div>
+          <div class="line"><code>${esc(b.source.branch)}</code> @ <code>${esc(b.source.commit)}</code> · built ${ago(b.builtAt)}${b.publishedAt ? ` · published ${ago(b.publishedAt)}` : ""} · ${runSummary}${b.lastRunAt ? ` · last ran ${ago(b.lastRunAt)}` : ""}</div>
         </div>
         <div class="actions">
           <button class="remove" title="move to Recently Removed (keeps the app artifact)">✕</button>
-          <button class="run" title="relaunch the installed app and stream its logs">Run</button>
-          <button class="install" data-missing="${b.appExists ? 0 : 1}">Install</button>
+          ${prLink}
+          <button class="install" data-missing="${b.appExists ? 0 : 1}">Install &amp; Run</button>
         </div>
       </div>
       ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
     </div>`);
   card.querySelector("button.install").onclick = event => install(b, event.currentTarget);
-  card.querySelector("button.run").onclick = event => runBuild(b, event.currentTarget);
   card.querySelector("button.remove").onclick = async () => {
       const button = card.querySelector("button.remove");
       button.disabled = true;
@@ -737,8 +1150,31 @@ async function hardDeleteBuild(build, button) {
   }
 }
 
+async function clearRemovedBuilds(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const count = allRemovedBuilds.length;
+  if (!count) return;
+  const message = `Permanently delete all ${count} build manifest${count === 1 ? "" : "s"} in Recently Removed? This includes iOS and Android builds hidden by the platform filter. App artifacts will remain on disk.`;
+  if (!confirm(message)) return;
+  const button = document.getElementById("clearRemoved");
+  button.disabled = true;
+  try {
+    const res = await fetch("/api/removed-builds", { method: "DELETE" });
+    const data = await responseJSON(res);
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    await loadBuilds();
+  } catch (e) {
+    alert("Could not clear Recently Removed: " + e.message);
+    await loadBuilds(); // Refresh in case a partial deletion occurred.
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function install(build) {
   if (!selectedDevice || installing) return;
+  if (logAbort) stopAppLogs();
   showBuildDetail(build);
   installing = true; renderSelection();
   clearConsole("installConsole");
@@ -760,25 +1196,24 @@ async function install(build) {
   } finally {
     installing = false; renderSelection();
   }
-  if (succeeded) startAppLogs(build);
+  if (succeeded) {
+    try {
+      await recordLaunch(build);
+    } catch (e) {
+      logLine("installConsole", "could not record launch: " + e.message, "err");
+    }
+    startAppLogs(build);
+  }
 }
 
-async function runBuild(build) {
-  if (!selectedDevice || installing) return;
-  showBuildDetail(build);
-  try {
-    const res = await fetch("/api/builds/" + encodeURIComponent(build.id) + "/run", { method: "POST" });
-    const data = await responseJSON(res);
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    build.runCount = data.runCount;
-    build.lastRunAt = data.lastRunAt;
-    renderBuilds();
-    renderBuildDetail();
-    startAppLogs(build);
-  } catch (e) {
-    logLine("appConsole", "could not start run: " + e.message, "err");
-    setLogStatus("not attached", false);
-  }
+async function recordLaunch(build) {
+  const res = await fetch("/api/builds/" + encodeURIComponent(build.id) + "/record-launch", { method: "POST" });
+  const data = await responseJSON(res);
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  build.runCount = data.runCount;
+  build.lastRunAt = data.lastRunAt;
+  renderBuilds();
+  renderBuildDetail();
 }
 
 async function startAppLogs(build) {
@@ -789,8 +1224,12 @@ async function startAppLogs(build) {
   stopAppLogs();
   const abort = new AbortController();
   logAbort = abort;
+  activeLogBuild = build;
+  activeLogDevice = selectedDevice;
   logContext = `${build.app.bundleId}_${build.source.branch}@${build.source.commit}`;
   setLogStatus(`attached — ${build.app.name} (${build.source.branch}@${build.source.commit})`, true);
+  renderCurrentRun();
+  updateLogsButton();
   clearConsole("appConsole");
   logLine("appConsole", `launching ${build.app.bundleId} with console attached…`, "meta-line");
   try {
@@ -802,18 +1241,24 @@ async function startAppLogs(build) {
     });
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     await pumpStream(res, line => logLine("appConsole", line, classify(line)));
-    setLogStatus("stream ended", false);
+    if (logAbort === abort) setLogStatus("stream ended", false);
   } catch (e) {
     if (e.name === "AbortError") {
       logLine("appConsole", "detached (app keeps running)", "meta-line");
-      setLogStatus("not attached", false);
+      if (logAbort === abort) setLogStatus("not attached", false);
     } else {
       logLine("appConsole", "log stream failed: " + e.message, "err");
-      setLogStatus("not attached", false);
+      if (logAbort === abort) setLogStatus("not attached", false);
     }
   } finally {
-    if (logAbort === abort) logAbort = null;
-    document.getElementById("stopLogs").disabled = true;
+    if (logAbort === abort) {
+      logAbort = null;
+      activeLogBuild = null;
+      activeLogDevice = null;
+      renderCurrentRun();
+      updateLogsButton();
+      document.getElementById("stopLogs").disabled = true;
+    }
   }
 }
 function stopAppLogs() {
@@ -843,6 +1288,7 @@ async function pumpStream(res, onLine) {
 
 for (const b of document.querySelectorAll("#osSwitch button"))
   b.classList.toggle("active", b.dataset.os === currentOS);
+setTheme(savedTheme());
 loadDevices();
 loadBuilds();
 setInterval(loadBuilds, 30000);

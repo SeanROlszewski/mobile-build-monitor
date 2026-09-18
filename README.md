@@ -2,7 +2,7 @@
 
 A local dashboard for installing iOS and Android builds on connected devices.
 
-Build your app, publish it, then pick a device and click **Install**. The dashboard installs the build and starts live app logs. Click **Run** to relaunch the app with a fresh log stream.
+Build your app, publish it, then pick a device and click **Install & Run**. The dashboard installs the build, launches it, and starts live app logs.
 
 Builds can come from any worktree, so you can work on several branches—or use several coding agents—at once. Each published build includes its branch, commit, PR, and testing notes so you can tell them apart.
 
@@ -29,6 +29,37 @@ The server listens on `127.0.0.1`. To use a different port, pass it as the first
 ```bash
 bin/dashboard 8485
 ```
+
+### Add an optional remote builder
+
+The first remote-builder step uses SSH only—no password, HTTP server, or cloud
+storage. Configure an SSH alias on the Mac running the dashboard, for example:
+
+```sshconfig
+Host mobile-builder
+  HostName builder.local
+  User builduser
+  IdentityFile ~/.ssh/mobile-builder
+  IdentitiesOnly yes
+```
+
+On the builder, create a directory for its monitor data:
+
+```bash
+mkdir -p /Users/builduser/.mobile-build-monitor
+```
+
+In the dashboard, open **Settings** (the gear), enter the `mobile-builder` SSH
+alias and `/Users/builduser/.mobile-build-monitor`, then choose **Check
+connection**. The check uses batch-mode SSH with a 15-second deadline and only
+verifies authentication plus that the directory is writable. It does not copy
+code, run a build, or expose SSH credentials.
+
+This establishes the connection used by the remote-build workflow. Leave it
+unconfigured to keep publishing and installing builds entirely on this Mac.
+The remote worker, its server-owned pre-build hook, job submission, and artifact
+download are intentionally separate steps so a working SSH setup can be
+verified first.
 
 ### Add the tools to a stable location
 
@@ -113,7 +144,7 @@ If an iOS build fails because of signing, use your project’s documented Xcode 
 
 Published builds are listed in `~/.mobile-build-monitor/builds/`, with one JSON manifest per build. To use another directory, set `MOBILE_BUILD_MONITOR_DIR` for both the publisher and the dashboard.
 
-Removing a build moves its manifest to the collapsed **Recently Removed** section and leaves the `.app` or `.apk` on disk. You can restore it there, or permanently remove its manifest; neither action deletes the build artifact.
+Removing a build moves its manifest to the collapsed **Recently Removed** section and leaves the `.app` or `.apk` on disk. You can restore it there, permanently remove one manifest, or use **Clear all** to remove every manifest in that section; none of those actions deletes a build artifact.
 
 Keep the app file on disk until you’ve installed it. Publishing records its location; it does not copy the build.
 
@@ -150,6 +181,17 @@ skills/             Shared skill instructions for Codex and Claude Code
 ```
 
 The server uses only the Python standard library.
+
+## Previewing dashboard states
+
+In **Settings**, enable **Use mock dashboard data** to preview repeated builds
+from the same worktrees, recent runs, recently removed builds, mock devices, and
+simulated live logs. Mock mode is isolated from local manifests, artifacts, and
+physical devices. Disable it to return to local data.
+
+The same Settings panel offers **System**, **Light**, and **Dark** appearance
+choices. The UI uses shared semantic color tokens, so new components should use
+those tokens rather than fixed color values.
 
 ## Manifest format
 
@@ -211,7 +253,7 @@ Manually published iOS builds must pass the same device-platform, arm64, code-si
 
 ### iOS
 
-Installation uses `xcrun devicectl device install app`. Logs come from `devicectl device process launch --terminate-existing --console`, which can attach only when the app launches. That’s why **Run** relaunches the app.
+**Install & Run** uses `xcrun devicectl device install app`, then `devicectl device process launch --terminate-existing --console` to launch the installed build and attach logs.
 
 To stop collecting logs without terminating the app, the server kills the local `devicectl` process with `SIGKILL`. Catchable signals such as `SIGTERM` would be forwarded to the app.
 
@@ -219,6 +261,6 @@ The server checks device availability with `device info details`. The `tunnelSta
 
 ### Android
 
-Installation uses `adb install -r`. Logs use `logcat`, filtered to the app’s process.
+**Install & Run** uses `adb install -r`, then starts the app and attaches process-filtered `logcat`.
 
-Logging can attach to a running app without restarting it. If the app isn’t running, it is started through a launcher intent. Stopping the log stream leaves the app running.
+Each **Install & Run** force-stops and starts the app through its launcher intent before attaching logs. Stopping the log stream leaves the app running.
